@@ -123,6 +123,7 @@
 const AYLAR=['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const BOLGELER=['Anadolu-1','Anadolu-2','Anadolu-3','Marmara','Ege','Akdeniz','İç Anadolu','Karadeniz','Güneydoğu'];
 const TURLER=['Yeni İş','Yenileme','Acente Ziyareti','Genel Görüşme'];
+const KONULAR=['Genel Görüşme','Yeni İş Teklifi','Yenileme Görüşmesi','Acente Ziyareti','RT Süreci / Takibi','Hasar / Dosya','Komisyon / Fiyat Pazarlığı','Tahsilat / Ödeme'];
 const COLMAP={uw:['UW'],tarih:['TARİH','TARIH'],bolge:['BÖLGE','BOLGE'],acente:['GÖRÜŞÜLEN ACENTE'],kisi:['GÖRÜŞME YAPILAN KİŞİ'],akis:['AKIŞ NO'],tur:['YENİ İŞ - YENİLEME'],konu:['KONU'],sonuc:['SONUÇ']};
 const $=id=>document.getElementById(id);const qa=s=>document.querySelectorAll(s);
 let CUR=null, PASS=null, ROWS=[], USERS=[];
@@ -169,7 +170,7 @@ async function enterApp(){
 }
 function buildTabs(){
   let tabs;
-  if(CUR.rol==='admin')tabs=[['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['uwkarsi','👥 UW Karşılaştırma'],['rapor','📤 Rapor']];
+  if(CUR.rol==='admin')tabs=[['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
   else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
   $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
   qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
@@ -290,7 +291,9 @@ function renderForm(){
         <div class="full"><label>Görüşülen Acente</label><input id="iAcente" value="${esc(e.acente||'')}" placeholder="Acente unvanı"></div>
         <div><label>Görüşülen Kişi</label><input id="iKisi" value="${esc(e.kisi||'')}" placeholder="Ad Soyad"></div>
         <div><label>Akış No</label><input id="iAkis" value="${esc(e.akis||'')}" placeholder="KTT...... (varsa)"></div>
-        <div class="full"><label>Konu</label><textarea id="iKonu" placeholder="Görüşme konusu">${esc(e.konu||'')}</textarea></div>
+        <div class="full"><label>Konu Başlığı</label>
+          <select id="iKonuBas">${KONULAR.map(k=>'<option'+(((e.konu||'').split(' — ')[0]===k)?' selected':'')+'>'+k+'</option>').join('')}</select></div>
+        <div class="full"><label>Konu Notu (opsiyonel)</label><textarea id="iKonuNot" placeholder="Detay / açıklama">${esc((e.konu||'').includes(' — ')?(e.konu||'').split(' — ').slice(1).join(' — '):((KONULAR.includes((e.konu||'').split(' — ')[0]))?'':(e.konu||'')))}</textarea></div>
         <div class="full"><label>Sonuç</label><textarea id="iSonuc" placeholder="Görüşme sonucu / aksiyon">${esc(e.sonuc||'')}</textarea></div>
       </div>
       <button class="save" id="saveBtn" onclick="saveForm()">${EDIT?'Güncelle':'Kaydet'}</button>
@@ -300,27 +303,34 @@ function renderForm(){
 }
 async function saveForm(){
   const ac=$('iAcente').value.trim();if(!ac){alert('Acente alanı zorunlu.');return;}
-  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:$('iKonu').value.trim(),sonuc:$('iSonuc').value.trim()};
+  const kbas=$('iKonuBas').value;const knot=$('iKonuNot').value.trim();
+  const konu=knot?(kbas+' — '+knot):kbas;
+  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:konu,sonuc:$('iSonuc').value.trim()};
   $('saveBtn').disabled=true;
   try{
     if(EDIT){await api('update',{payload:p});EDIT=null;$('formMsg').textContent='✓ Güncellendi';}
-    else{await api('add',{payload:p});$('formMsg').textContent='✓ Kaydedildi';['iAcente','iKisi','iAkis','iKonu','iSonuc'].forEach(i=>$(i).value='');}
+    else{await api('add',{payload:p});$('formMsg').textContent='✓ Kaydedildi';['iAcente','iKisi','iAkis','iKonuNot','iSonuc'].forEach(i=>$(i).value='');}
   }catch(e){alert(e.error||'Kaydedilemedi')}
   $('saveBtn').disabled=false;setTimeout(()=>{if($('formMsg'))$('formMsg').textContent=''},2500);
 }
 
 function renderUpload(){
+  const isAdmin=(CUR.rol==='admin');
+  const uwSel=isAdmin?`<div class="f" style="min-width:220px"><label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Kayıtlar kimin adına?</label>
+    <select id="xUw" style="padding:9px 11px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit">${USERS.map(u=>'<option value="'+u.id+'"'+(u.id===CUR.id?' selected':'')+'>'+esc(u.ad)+'</option>').join('')}</select></div>`:'';
   $('view').innerHTML=`
+    ${isAdmin?'<div class="formcard" style="display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin-bottom:14px">'+uwSel+'<div class="note" style="font-size:12px;color:var(--muted);flex:1">Admin olarak başka bir UW adına toplu kayıt yükleyebilirsiniz. Önce UW seçin, sonra Excel\\u0027i yükleyin.</div></div>':''}
     <div class="uploadbar">
       <label class="up" for="xfile">📁 Excel Seç</label>
       <input type="file" id="xfile" accept=".xlsx,.xls">
-      <span class="note">Kolonlar: UW · TARİH · BÖLGE · GÖRÜŞÜLEN ACENTE · GÖRÜŞME YAPILAN KİŞİ · AKIŞ NO · YENİ İŞ - YENİLEME · KONU · SONUÇ — kayıtlar sizin adınıza eklenir</span>
+      <span class="note">Kolonlar: UW · TARİH · BÖLGE · GÖRÜŞÜLEN ACENTE · GÖRÜŞME YAPILAN KİŞİ · AKIŞ NO · YENİ İŞ - YENİLEME · KONU · SONUÇ${isAdmin?' — kayıtlar seçtiğiniz UW adına eklenir':' — kayıtlar sizin adınıza eklenir'}</span>
     </div><div id="upResult"></div>`;
   $('xfile').addEventListener('change',handleUpload);
 }
 function handleUpload(e){
   const file=e.target.files[0];if(!file)return;
   $('upResult').innerHTML='<div class="loading">İşleniyor...</div>';
+  const hedefUw=(CUR.rol==='admin'&&$('xUw'))?$('xUw').value:null;
   const rd=new FileReader();
   rd.onload=async ev=>{
     const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
@@ -328,7 +338,10 @@ function handleUpload(e){
     const items=[];
     rows.forEach(row=>{let t=pick(row,COLMAP.tarih);if(t instanceof Date)t=t.toISOString().slice(0,10);else t=norm(t);const ac=norm(pick(row,COLMAP.acente));if(!ac)return;
       items.push({tarih:t,bolge:norm(pick(row,COLMAP.bolge)),acente:ac,kisi:norm(pick(row,COLMAP.kisi)),akis:norm(pick(row,COLMAP.akis)),tur:norm(pick(row,COLMAP.tur)),konu:norm(pick(row,COLMAP.konu)),sonuc:norm(pick(row,COLMAP.sonuc))});});
-    try{const r=await api('bulk',{payload:{items}});$('upResult').innerHTML='<div class="insight"><b>'+r.added+'</b> görüşme eklendi. "Görüşmelerim" sekmesinden görebilirsiniz.</div>';}
+    try{const pl={items};if(hedefUw)pl.hedef_uw=hedefUw;
+      const r=await api('bulk',{payload:pl});
+      const adi=(USERS.find(u=>u.id===(r.hedef||hedefUw))||{}).ad||'';
+      $('upResult').innerHTML='<div class="insight"><b>'+r.added+'</b> görüşme eklendi'+(adi?' ('+esc(adi)+' adına)':'')+'.</div>';}
     catch(er){$('upResult').innerHTML='<div class="empty">Hata: '+(er.error||'yükleme')+'</div>';}
   };
   rd.readAsArrayBuffer(file);
@@ -420,7 +433,7 @@ function renderRapor(){
         <button class="primary" onclick="exportXlsx()">⬇ Görüşmeler (.xlsx)</button>
         <button onclick="exportCsv()">⬇ CSV</button>
         <button onclick="exportKio()">⬇ KİO Takip Listesi</button>
-        <button onclick="window.print()">🖨 Yazdır / PDF</button>
+        <button onclick="printRapor()">🖨 Yazdır / PDF</button>
       </div>
       <div class="insight">Toplam <b>${ROWS.length}</b> kayıt · <b>${uniq(ROWS.map(r=>r.uw_ad)).length}</b> UW</div>
     </div>`;
@@ -428,6 +441,37 @@ function renderRapor(){
 function expRows(){return ROWS.map(r=>({'UW':r.uw_ad,'TARİH':r.tarih,'BÖLGE':r.bolge,'GÖRÜŞÜLEN ACENTE':r.acente,'GÖRÜŞME YAPILAN KİŞİ':r.kisi,'AKIŞ NO':r.akis,'YENİ İŞ - YENİLEME':r.tur,'KONU':r.konu,'SONUÇ':r.sonuc}))}
 function exportXlsx(){const ws=XLSX.utils.json_to_sheet(expRows());const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'ARAMALAR');XLSX.writeFile(wb,'acente_aramalar_export.xlsx');}
 function exportCsv(){const ws=XLSX.utils.json_to_sheet(expRows());const csv=XLSX.utils.sheet_to_csv(ws);const b=new Blob(['\ufeff'+csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='acente_aramalar.csv';a.click();}
+function printRapor(){
+  const f=ROWS.slice().sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''));
+  const bugun=new Date().toLocaleDateString('tr-TR');
+  const kioG=f.filter(r=>r.kio_mu).length;
+  const rowsHtml=f.map(r=>`<tr>
+    <td>${r.tarih||''}</td><td>${esc(r.uw_ad||'')}</td><td>${esc(r.bolge||'')}</td>
+    <td><b>${esc(r.acente||'')}</b>${r.kio_mu?' <span style="color:#0a7d32">●KİO</span>':' <span style="color:#a16207">○</span>'}</td>
+    <td>${esc(r.kisi||'')}</td><td>${esc(r.tur||'')}</td><td>${esc(r.akis||'')}</td>
+    <td>${esc(r.konu||'')}</td><td style="font-size:9px">${esc(r.sonuc||'')}</td></tr>`).join('');
+  const html=`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Acente Aramaları Raporu</title>
+    <style>
+      *{font-family:-apple-system,Arial,sans-serif}
+      body{margin:24px;color:#1A1A1A}
+      .hdr{border-bottom:3px solid #C8102E;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end}
+      .hdr h1{font-size:18px;margin:0}.hdr .s{font-size:11px;color:#666}
+      .meta{font-size:11px;color:#444;margin-bottom:12px}
+      .meta b{color:#C8102E}
+      table{width:100%;border-collapse:collapse;font-size:10px}
+      th{background:#1A1A1A;color:#fff;padding:6px 5px;text-align:left;font-size:10px}
+      td{padding:5px;border-bottom:1px solid #ddd;vertical-align:top}
+      tr:nth-child(even){background:#f7f7f7}
+      @media print{.noprint{display:none}}
+    </style></head><body>
+    <div class="hdr"><div><h1>ACENTE ARAMALARI RAPORU</h1><div class="s">Sompo Sigorta · Endüstriyel Riskler (Yangın)</div></div><div class="s">${bugun}</div></div>
+    <div class="meta">Toplam <b>${f.length}</b> görüşme · <b>${kioG}</b> KİO · <b>${f.length-kioG}</b> liste dışı · <b>${uniq(f.map(r=>r.acente)).length}</b> farklı acente · <b>${uniq(f.map(r=>r.uw_ad)).length}</b> UW</div>
+    <table><thead><tr><th>Tarih</th><th>UW</th><th>Bölge</th><th>Acente</th><th>Kişi</th><th>Tür</th><th>Akış No</th><th>Konu</th><th>Sonuç</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <p class="noprint" style="margin-top:16px;font-size:12px;color:#666">Yazdırma penceresi açılıyor… Çıkmazsa Ctrl/Cmd+P ile yazdırıp "PDF olarak kaydet" seçin.</p>
+    <script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script>
+    </body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
 async function exportKio(){
   try{const d=await api('kio_durum');
     const rows=(d.kio||[]).map(k=>({'KİO ACENTE':k.ad,'İL':k.il,'SOMPO BÖLGE':k.sompo_bolge,'BRANŞ':k.hangi_brans,'DURUM':k.arandi?'Arandı':'Aranmadı','GÖRÜŞME SAYISI':k.gorusme_sayisi,'SON GÖRÜŞME':k.son_gorusme||''}));
