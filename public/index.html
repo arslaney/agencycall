@@ -146,7 +146,7 @@ async function api(action, extra={}){
 async function initLogin(){
   // küçük hile: login dropdown için kullanıcıları çekmek üzere geçici, şifresiz uç yok.
   // bu yüzden kullanıcı listesini gömüyoruz (sadece isim/kod, gizli değil).
-  USERS=[{"id": "mustafa.arslan", "ad": "Mustafa Arslan", "rol": "admin"}, {"id": "melek.zavalsiz", "ad": "Melek Zavalsız", "rol": "admin"}, {"id": "emine.moroglu", "ad": "Emine Moroğlu Yazıcı", "rol": "admin"}, {"id": "veysel.aydin", "ad": "Veysel Aydın", "rol": "admin"}, {"id": "ali.suren", "ad": "Ali Rıza Süren", "rol": "uw"}, {"id": "batuhan.kavraz", "ad": "Batuhan Kavraz", "rol": "uw"}, {"id": "burhan.ozer", "ad": "Burhan Özer", "rol": "uw"}, {"id": "fatma.unlu", "ad": "Fatma Nur Ünlü", "rol": "uw"}, {"id": "naime.atay", "ad": "Naime Pınar Atay", "rol": "uw"}, {"id": "raziye.gunes", "ad": "Raziye Güneş", "rol": "uw"}, {"id": "turan.gokdemir", "ad": "Turan Gökdemir", "rol": "uw"}, {"id": "yusuf.sacan", "ad": "Yusuf Sacan", "rol": "uw"}];
+  USERS=[{"id": "mustafa.arslan", "ad": "Mustafa Arslan", "rol": "admin"}, {"id": "melek.zavalsiz", "ad": "Melek Zavalsız", "rol": "uw"}, {"id": "emine.moroglu", "ad": "Emine Moroğlu Yazıcı", "rol": "uw"}, {"id": "veysel.aydin", "ad": "Veysel Aydın", "rol": "uw"}, {"id": "ali.suren", "ad": "Ali Rıza Süren", "rol": "uw"}, {"id": "batuhan.kavraz", "ad": "Batuhan Kavraz", "rol": "uw"}, {"id": "burhan.ozer", "ad": "Burhan Özer", "rol": "uw"}, {"id": "fatma.unlu", "ad": "Fatma Nur Ünlü", "rol": "uw"}, {"id": "naime.atay", "ad": "Naime Pınar Atay", "rol": "uw"}, {"id": "raziye.gunes", "ad": "Raziye Güneş", "rol": "uw"}, {"id": "turan.gokdemir", "ad": "Turan Gökdemir", "rol": "uw"}, {"id": "yusuf.sacan", "ad": "Yusuf Sacan", "rol": "uw"}];
   $('loginUser').innerHTML=USERS.map(u=>'<option value="'+u.id+'">'+esc(u.ad)+(u.rol==='admin'?' ★':'')+'</option>').join('');
 }
 async function doLogin(){
@@ -170,17 +170,18 @@ async function enterApp(){
 }
 function buildTabs(){
   let tabs;
-  if(CUR.rol==='admin')tabs=[['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
+  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
   else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
   $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
   qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
   showView(tabs[0][0]);
 }
-async function loadRows(){const r=await api('list');ROWS=r.rows.map(x=>({...x,ay:x.ay||ayNo(x.tarih)}));return ROWS;}
+async function loadRows(sadeceBenim){const r=await api('list',{payload:sadeceBenim?{sadece_benim:true}:{}});ROWS=r.rows.map(x=>({...x,ay:x.ay||ayNo(x.tarih)}));return ROWS;}
 async function showView(v){
   const el=$('view');el.innerHTML='<div class="loading">Yükleniyor...</div>';
   try{
-    if(v==='ozet'||v==='benim'){await loadRows();renderDashboard(v==='ozet');}
+    if(v==='benim'){await loadRows(true);renderDashboard(false);}
+    else if(v==='ozet'){await loadRows(false);renderDashboard(true);}
     else if(v==='kio'){await renderKioTakip();}
     else if(v==='uwkarsi'){await loadRows();renderUwCompare();}
     else if(v==='rapor'){await loadRows();renderRapor();}
@@ -257,8 +258,8 @@ function draw(isAdmin){
     const wa=f.filter(r=>r.akis).length;ins.push('<div class="insight">Akış no\u0027lu görüşme: <b>'+wa+'</b></div>');}
   $('ins').innerHTML=ins.join('')||'<div class="empty">Kayıt yok</div>';
   $('rc').textContent=f.length;
-  const canEdit=(CUR.rol==='uw');
   $('recs').innerHTML=f.length?f.slice().reverse().map(r=>{
+    const benimKaydim=(r.uw_id===CUR.id);
     let tc='tag tur-yeni';if((r.tur||'').toLowerCase()==='yenileme')tc='tag tur-yen';
     const kioTag=r.kio_mu?'<span class="tag" style="background:#0a7d32;color:#fff">KİO ✓</span>':'<span class="tag" style="background:#fff;color:#a16207;border:1px solid #eab308">Liste dışı</span>';
     return '<div class="rec"><div class="top">'+
@@ -272,7 +273,7 @@ function draw(isAdmin){
       (r.kisi?'<div class="kisi">👤 '+esc(r.kisi)+'</div>':'')+
       (r.konu?'<div class="konu">'+esc(r.konu)+'</div>':'')+
       (r.sonuc?'<div class="sonuc">'+esc(r.sonuc)+'</div>':'')+
-      (canEdit?'<div class="actions"><button class="edit" onclick="editRec(\''+r.id+'\')">Düzenle</button><button class="del" onclick="delRec(\''+r.id+'\')">Sil</button></div>':'')+
+      (benimKaydim?'<div class="actions"><button class="edit" onclick="editRec(\''+r.id+'\')">Düzenle</button><button class="del" onclick="delRec(\''+r.id+'\')">Sil</button></div>':'')+
     '</div>';}).join(''):'<div class="empty">Görüşme bulunamadı.</div>';
 }
 async function delRec(id){if(!confirm('Bu görüşme silinsin mi?'))return;try{await api('delete',{payload:{id}});showView('benim');}catch(e){alert(e.error||'Silinemedi')}}
