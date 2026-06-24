@@ -62,7 +62,9 @@ module.exports = async (req, res) => {
     // --- GÖRÜŞMELERİ LİSTELE ---
     if (action === 'list') {
       // admin = hepsi, uw = sadece kendi. KİO bilgisi view'dan gelir.
-      const filter = isAdmin ? '' : `&uw_id=eq.${encodeURIComponent(uw_id)}`;
+      // admin "Görüşmelerim" için sadece_benim=true gönderir → kendi kayıtları
+      const sadeceBenim = (payload || {}).sadece_benim === true;
+      const filter = (isAdmin && !sadeceBenim) ? '' : `&uw_id=eq.${encodeURIComponent(uw_id)}`;
       const rows = await sb(
         `acente_gorusmeler_kio?select=*,acente_uw(ad)${filter}&order=tarih.asc`
       );
