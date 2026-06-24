@@ -362,7 +362,7 @@ function renderUwCompare(){
     </div></div>
     <div class="panel" style="margin-top:18px"><h2>Çıkarımlar</h2><div class="body">
       ${rows.length?'<div class="insight">En aktif UW: <b>'+esc(rows[0].u)+'</b> ('+rows[0].t+' görüşme)</div>':''}
-      <div class="insight">Toplam '+ROWS.length+' görüşme · '+uws.length+' UW · '+uniq(ROWS.map(r=>r.acente)).length+' farklı acente</div>
+      <div class="insight">Toplam ${ROWS.length} görüşme · ${uws.length} UW · ${uniq(ROWS.map(r=>r.acente)).length} farklı acente</div>
     </div></div>`;
 }
 
