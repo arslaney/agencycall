@@ -160,16 +160,23 @@ module.exports = async (req, res) => {
 
     // --- TOPLU EKLE (Excel) ---
     if (action === 'bulk') {
-      const items = (payload || {}).items || [];
+      const pl = payload || {};
+      const items = pl.items || [];
+      // admin başka UW adına yükleyebilir; UW sadece kendi adına
+      let hedefUw = uw_id;
+      if (isAdmin && pl.hedef_uw) {
+        const chk = await sb(`acente_uw?id=eq.${encodeURIComponent(pl.hedef_uw)}&select=id`);
+        if (chk[0]) hedefUw = pl.hedef_uw;
+      }
       const recs = items.filter(p => p.acente).map(p => ({
-        uw_id,
+        uw_id: hedefUw,
         tarih: p.tarih || null, bolge: p.bolge || null, acente: p.acente,
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
         konu: p.konu || null, sonuc: p.sonuc || null
       }));
       if (!recs.length) return res.json({ ok: true, added: 0 });
       await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(recs), prefer: 'return=minimal' });
-      return res.json({ ok: true, added: recs.length });
+      return res.json({ ok: true, added: recs.length, hedef: hedefUw });
     }
 
     return res.status(400).json({ error: 'Bilinmeyen aksiyon' });
