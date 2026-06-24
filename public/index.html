@@ -1,1 +1,444 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acente Aramaları Sistemi — Sompo</title>
+<style>
+  :root{--red:#C8102E;--dark:#1A1A1A;--bg:#f4f4f5;--card:#fff;--line:#e4e4e7;--muted:#71717a;--soft:#fafafa;--green:#0a7d32}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--dark);line-height:1.5}
+  .hidden{display:none!important}
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1A1A1A,#2d2d2d);padding:16px}
+  .loginbox{background:#fff;border-radius:14px;padding:38px 34px;width:360px;max-width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .loginbox .logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .loginbox .dot{width:14px;height:14px;border-radius:50%;background:var(--red)}
+  .loginbox h1{font-size:19px;font-weight:800}
+  .loginbox .sub{font-size:12px;color:var(--muted);margin-bottom:24px}
+  .loginbox label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:14px 0 5px;text-transform:uppercase;letter-spacing:.4px}
+  .loginbox select,.loginbox input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit}
+  .loginbox button{width:100%;margin-top:22px;padding:12px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
+  .loginbox button:hover{background:#a50d26}
+  .loginbox button:disabled{opacity:.6;cursor:wait}
+  .loginbox .err{color:var(--red);font-size:12px;margin-top:10px;text-align:center;min-height:16px}
+  .loginbox .hint{font-size:11px;color:var(--muted);margin-top:18px;text-align:center;line-height:1.6}
+  header{background:var(--dark);color:#fff;padding:14px 26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  header .brand{display:flex;align-items:center;gap:11px}
+  header .dot{width:11px;height:11px;border-radius:50%;background:var(--red)}
+  header h1{font-size:16px;font-weight:700}
+  header .who{font-size:12px;color:#a1a1aa;margin-top:2px}
+  header .right{display:flex;align-items:center;gap:14px}
+  .badge{font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px}
+  .badge.admin{background:var(--red);color:#fff}.badge.uw{background:#3f3f46;color:#fff}
+  header button.logout{background:transparent;border:1px solid #52525b;color:#d4d4d8;padding:6px 13px;border-radius:6px;font-size:12px;cursor:pointer}
+  .wrap{max-width:1300px;margin:0 auto;padding:20px}
+  .tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:2px solid var(--line);flex-wrap:wrap}
+  .tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px}
+  .tab.on{color:var(--red);border-bottom-color:var(--red)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden}
+  .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--red)}
+  .kpi .v{font-size:26px;font-weight:800}.kpi .l{font-size:11px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+  .filters{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
+  .filters .f label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+  .filters select,.filters input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff;font-family:inherit}
+  .filters .reset{padding:8px 14px;background:var(--soft);border:1px solid var(--line);border-radius:6px;font-size:12px;cursor:pointer;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+  @media(max-width:880px){.grid2{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .panel h2{font-size:13px;font-weight:700;padding:13px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+  .panel h2::before{content:'';width:8px;height:8px;background:var(--red);border-radius:2px}
+  .panel .body{padding:8px 16px 14px}
+  .bar{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+  .bar .name{width:42%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .track{flex:1;background:var(--soft);border-radius:4px;height:18px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,var(--red),#e0364f);border-radius:4px}
+  .bar .num{width:30px;text-align:right;font-weight:700}
+  .insight{font-size:13px;padding:9px 12px;background:var(--soft);border-left:3px solid var(--red);border-radius:4px;margin:8px 0}
+  .insight b{color:var(--red)}
+  .records h2 .count{margin-left:auto;background:var(--red);color:#fff;font-size:11px;padding:2px 9px;border-radius:20px}
+  .rec{border-bottom:1px solid var(--line);padding:14px 16px}.rec:last-child{border-bottom:none}
+  .rec .top{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:7px}
+  .tag{font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px}
+  .tag.bolge{background:#1A1A1A;color:#fff}.tag.uw{background:#3f3f46;color:#fff}
+  .tag.tur-yeni{background:var(--red);color:#fff}.tag.tur-yen{background:var(--green);color:#fff}
+  .tag.tarih{background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+  .tag.akis{background:#fff;color:var(--red);border:1px solid var(--red);font-family:monospace;font-size:10px}
+  .rec .acente{font-weight:700;font-size:14px}.rec .kisi{font-size:12px;color:var(--muted);margin-bottom:5px}
+  .rec .konu{font-size:13px;font-weight:600;margin:5px 0 3px}
+  .rec .sonuc{font-size:13px;color:#3f3f46;background:var(--soft);padding:9px 11px;border-radius:6px;border:1px solid var(--line);white-space:pre-line}
+  .rec .actions{margin-top:8px;display:flex;gap:8px}
+  .rec .actions button{font-size:11px;padding:4px 10px;border:1px solid var(--line);background:#fff;border-radius:5px;cursor:pointer;font-weight:600}
+  .rec .actions .del{color:var(--red);border-color:var(--red)}
+  .rec .actions .edit{color:var(--dark)}
+  .empty{padding:36px;text-align:center;color:var(--muted);font-size:14px}
+  .formcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+  .formcard h2{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .formgrid .full{grid-column:1/-1}
+  .formgrid label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+  .formgrid input,.formgrid select,.formgrid textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit}
+  .formgrid textarea{min-height:70px;resize:vertical}
+  .formcard .save{margin-top:14px;padding:11px 26px;background:var(--red);color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer}
+  .formcard .save:hover{background:#a50d26}
+  .formcard .cancel{margin-left:8px;padding:11px 20px;background:var(--soft);border:1px solid var(--line);border-radius:7px;font-size:14px;cursor:pointer}
+  .uploadbar{background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:16px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .uploadbar label.up{background:var(--dark);color:#fff;padding:9px 18px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer}
+  .uploadbar input[type=file]{display:none}.uploadbar .note{font-size:12px;color:var(--muted)}
+  .toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .toolbar button{padding:9px 16px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer}
+  .toolbar button.primary{background:var(--red);color:#fff;border-color:var(--red)}
+  .loading{padding:40px;text-align:center;color:var(--muted)}
+  table.cmp{width:100%;border-collapse:collapse;font-size:13px}
+  table.cmp th{text-align:left;padding:8px 6px;border-bottom:2px solid var(--line)}
+  table.cmp td{padding:9px 6px;border-bottom:1px solid var(--line)}
+  footer{text-align:center;padding:18px;color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="loginbox">
+    <div class="logo"><span class="dot"></span><h1>Acente Aramaları</h1></div>
+    <div class="sub">Sompo Sigorta · Görüşme Takip Sistemi</div>
+    <label>Kullanıcı</label><select id="loginUser"><option>Yükleniyor...</option></select>
+    <label>Şifre</label>
+    <input type="password" id="loginPass" placeholder="••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    <button id="loginBtn" onclick="doLogin()">Giriş Yap</button>
+    <div class="err" id="loginErr"></div>
+    <div class="hint">Ortak şifre ile giriş yapılır.</div>
+  </div>
+</div>
 
+<div id="app" class="hidden">
+  <header>
+    <div class="brand"><span class="dot"></span><div><h1>ACENTE ARAMALARI</h1><div class="who" id="whoami"></div></div></div>
+    <div class="right"><span class="badge" id="roleBadge"></span><button class="logout" onclick="doLogout()">Çıkış</button></div>
+  </header>
+  <div class="wrap"><div class="tabs" id="tabs"></div><div id="view"></div></div>
+  <footer>Sompo Sigorta · Endüstriyel Riskler · Veriler güvenli sunucuda saklanır</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const AYLAR=['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+const BOLGELER=['Anadolu-1','Anadolu-2','Anadolu-3','Marmara','Ege','Akdeniz','İç Anadolu','Karadeniz','Güneydoğu'];
+const TURLER=['Yeni İş','Yenileme','Acente Ziyareti','Genel Görüşme'];
+const COLMAP={uw:['UW'],tarih:['TARİH','TARIH'],bolge:['BÖLGE','BOLGE'],acente:['GÖRÜŞÜLEN ACENTE'],kisi:['GÖRÜŞME YAPILAN KİŞİ'],akis:['AKIŞ NO'],tur:['YENİ İŞ - YENİLEME'],konu:['KONU'],sonuc:['SONUÇ']};
+const $=id=>document.getElementById(id);const qa=s=>document.querySelectorAll(s);
+let CUR=null, PASS=null, ROWS=[], USERS=[];
+function esc(s){return(s||'').toString().replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function uniq(a){return[...new Set(a.filter(Boolean))].sort()}
+function ayNo(t){const m=/^(\d{4})-(\d{2})/.exec(t||'');return m?parseInt(m[2],10):0}
+function norm(s){return(s||'').toString().trim()}
+function pick(row,keys){for(const k of keys){for(const rk in row){if(rk.trim().toUpperCase()===k.toUpperCase())return row[rk]}}return''}
+
+async function api(action, extra={}){
+  const res=await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action,password:PASS,uw_id:CUR?CUR.id:extra.uw_id,...extra})});
+  const data=await res.json();
+  if(!res.ok)throw data;
+  return data;
+}
+
+// load users for login dropdown (needs password? no — list of names is not secret; but our API requires pass for users action)
+// So: fetch users without password via a public read — we expose only names through login action set.
+async function initLogin(){
+  // küçük hile: login dropdown için kullanıcıları çekmek üzere geçici, şifresiz uç yok.
+  // bu yüzden kullanıcı listesini gömüyoruz (sadece isim/kod, gizli değil).
+  USERS=[{"id": "mustafa.arslan", "ad": "Mustafa Arslan", "rol": "admin"}, {"id": "melek.zavalsiz", "ad": "Melek Zavalsız", "rol": "admin"}, {"id": "emine.moroglu", "ad": "Emine Moroğlu Yazıcı", "rol": "admin"}, {"id": "veysel.aydin", "ad": "Veysel Aydın", "rol": "admin"}, {"id": "ali.suren", "ad": "Ali Rıza Süren", "rol": "uw"}, {"id": "batuhan.kavraz", "ad": "Batuhan Kavraz", "rol": "uw"}, {"id": "burhan.ozer", "ad": "Burhan Özer", "rol": "uw"}, {"id": "fatma.unlu", "ad": "Fatma Nur Ünlü", "rol": "uw"}, {"id": "naime.atay", "ad": "Naime Pınar Atay", "rol": "uw"}, {"id": "raziye.gunes", "ad": "Raziye Güneş", "rol": "uw"}, {"id": "turan.gokdemir", "ad": "Turan Gökdemir", "rol": "uw"}, {"id": "yusuf.sacan", "ad": "Yusuf Sacan", "rol": "uw"}];
+  $('loginUser').innerHTML=USERS.map(u=>'<option value="'+u.id+'">'+esc(u.ad)+(u.rol==='admin'?' ★':'')+'</option>').join('');
+}
+async function doLogin(){
+  const id=$('loginUser').value,p=$('loginPass').value;
+  $('loginBtn').disabled=true;$('loginErr').textContent='';
+  try{
+    const r=await api('login',{uw_id:id,password:p});
+    CUR=r.user;PASS=p;
+    sessionStorage.setItem('acur',JSON.stringify({u:CUR,p:PASS}));
+    enterApp();
+  }catch(e){$('loginErr').textContent=e.error||'Giriş başarısız';}
+  $('loginBtn').disabled=false;
+}
+function doLogout(){sessionStorage.removeItem('acur');CUR=null;PASS=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginPass').value='';}
+async function enterApp(){
+  $('login').classList.add('hidden');$('app').classList.remove('hidden');
+  $('whoami').textContent=CUR.ad+(CUR.unvan?' · '+CUR.unvan:'');
+  $('roleBadge').textContent=CUR.rol==='admin'?'ADMIN':'UW';
+  $('roleBadge').className='badge '+(CUR.rol==='admin'?'admin':'uw');
+  buildTabs();
+}
+function buildTabs(){
+  let tabs;
+  if(CUR.rol==='admin')tabs=[['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['uwkarsi','👥 UW Karşılaştırma'],['rapor','📤 Rapor']];
+  else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
+  $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
+  qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
+  showView(tabs[0][0]);
+}
+async function loadRows(){const r=await api('list');ROWS=r.rows.map(x=>({...x,ay:x.ay||ayNo(x.tarih)}));return ROWS;}
+async function showView(v){
+  const el=$('view');el.innerHTML='<div class="loading">Yükleniyor...</div>';
+  try{
+    if(v==='ozet'||v==='benim'){await loadRows();renderDashboard(v==='ozet');}
+    else if(v==='kio'){await renderKioTakip();}
+    else if(v==='uwkarsi'){await loadRows();renderUwCompare();}
+    else if(v==='rapor'){await loadRows();renderRapor();}
+    else if(v==='ekle')renderForm();
+    else if(v==='yukle')renderUpload();
+  }catch(e){el.innerHTML='<div class="empty">Hata: '+(e.error||'bağlantı')+'</div>';}
+}
+
+let FILT={};
+function renderDashboard(isAdmin){
+  FILT={ay:'',bolge:'',uw:'',tur:'',acente:'',q:''};
+  $('view').innerHTML=`
+    <div class="kpis" id="kpis"></div>
+    <div class="filters">
+      <div class="f"><label>Ay</label><select id="fAy"></select></div>
+      <div class="f"><label>Bölge</label><select id="fBolge"></select></div>
+      ${isAdmin?'<div class="f"><label>UW</label><select id="fUw"></select></div>':''}
+      <div class="f"><label>İş Türü</label><select id="fTur"></select></div>
+      <div class="f"><label>KİO</label><select id="fKio"><option value="">Tümü</option><option value="1">Sadece KİO</option><option value="0">Liste dışı</option></select></div>
+      <div class="f"><label>Acente</label><select id="fAcente"></select></div>
+      <div class="f"><label>Ara</label><input id="fSearch" placeholder="firma, RT, OSB..."></div>
+      <button class="reset" id="reset">Sıfırla</button>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h2>Aylık Dağılım</h2><div class="body" id="ayBar"></div></div>
+      <div class="panel"><h2>Acente Yoğunluğu</h2><div class="body" id="acBar"></div></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h2>${isAdmin?'UW Dağılımı':'Bölge Dağılımı'}</h2><div class="body" id="bolBar"></div></div>
+      <div class="panel"><h2>Çıkarımlar</h2><div class="body" id="ins"></div></div>
+    </div>
+    <div class="panel records"><h2>Görüşme Dökümü <span class="count" id="rc">0</span></h2><div id="recs"></div></div>`;
+  const aylar=uniq(ROWS.map(r=>r.ay).filter(a=>a>0)).sort((a,b)=>a-b);
+  $('fAy').innerHTML='<option value="">Tümü (Ay)</option>'+aylar.map(a=>'<option value="'+a+'">'+AYLAR[a]+'</option>').join('');
+  $('fBolge').innerHTML='<option value="">Tümü (Bölge)</option>'+uniq(ROWS.map(r=>r.bolge)).map(v=>'<option>'+esc(v)+'</option>').join('');
+  if(isAdmin)$('fUw').innerHTML='<option value="">Tümü (UW)</option>'+uniq(ROWS.map(r=>r.uw_ad)).map(v=>'<option>'+esc(v)+'</option>').join('');
+  $('fTur').innerHTML='<option value="">Tümü (Tür)</option>'+uniq(ROWS.map(r=>r.tur)).map(v=>'<option>'+esc(v)+'</option>').join('');
+  $('fAcente').innerHTML='<option value="">Tümü (Acente)</option>'+uniq(ROWS.map(r=>r.acente)).map(v=>'<option>'+esc(v)+'</option>').join('');
+  const ids=['fAy','fBolge','fTur','fKio','fAcente','fSearch'];if(isAdmin)ids.push('fUw');
+  const read=()=>{FILT={ay:$('fAy').value,bolge:$('fBolge').value,uw:isAdmin&&$('fUw')?$('fUw').value:'',tur:$('fTur').value,kio:$('fKio').value,acente:$('fAcente').value,q:$('fSearch').value.toLowerCase().trim()}};
+  ids.forEach(id=>{if($(id))$(id).addEventListener('input',()=>{read();draw(isAdmin)})});
+  $('reset').onclick=()=>{ids.forEach(i=>{if($(i))$(i).value=''});read();draw(isAdmin)};
+  draw(isAdmin);
+}
+function applyF(){return ROWS.filter(r=>{
+  if(FILT.ay&&r.ay!==parseInt(FILT.ay,10))return false;
+  if(FILT.bolge&&r.bolge!==FILT.bolge)return false;
+  if(FILT.uw&&r.uw_ad!==FILT.uw)return false;
+  if(FILT.tur&&r.tur!==FILT.tur)return false;
+  if(FILT.acente&&r.acente!==FILT.acente)return false;
+  if(FILT.kio==='1'&&!r.kio_mu)return false;
+  if(FILT.kio==='0'&&r.kio_mu)return false;
+  if(FILT.q){const b=((r.konu||'')+' '+(r.sonuc||'')+' '+(r.acente||'')+' '+(r.kisi||'')+' '+(r.akis||'')).toLowerCase();if(!b.includes(FILT.q))return false;}
+  return true;})}
+function barHTML(entries,lf){if(!entries.length)return '<div class="empty">Veri yok</div>';const mx=Math.max(1,...entries.map(e=>e[1]));return entries.map(e=>'<div class="bar"><span class="name" title="'+esc(lf(e[0]))+'">'+esc(lf(e[0]))+'</span><span class="track"><span class="fill" style="width:'+(e[1]/mx*100)+'%"></span></span><span class="num">'+e[1]+'</span></div>').join('')}
+function draw(isAdmin){
+  const f=applyF();
+  const yeni=f.filter(r=>(r.tur||'').toLowerCase().includes('yeni iş')).length;
+  const yen=f.filter(r=>(r.tur||'').toLowerCase()==='yenileme').length;
+  const kioG=f.filter(r=>r.kio_mu).length;
+  const kpis=[[f.length,'Görüşme'],[uniq(f.map(r=>r.acente)).length,'Aktif Acente'],[kioG,'KİO Görüşme'],[f.length-kioG,'Liste Dışı'],[yeni,'Yeni İş']];
+  if(isAdmin)kpis.push([uniq(f.map(r=>r.uw_ad)).length,'UW']);
+  $('kpis').innerHTML=kpis.map(k=>'<div class="kpi"><div class="v">'+k[0]+'</div><div class="l">'+k[1]+'</div></div>').join('');
+  const aym={};f.forEach(r=>{if(r.ay>0)aym[r.ay]=(aym[r.ay]||0)+1});
+  $('ayBar').innerHTML=barHTML(Object.entries(aym).map(([k,v])=>[+k,v]).sort((a,b)=>a[0]-b[0]),k=>AYLAR[k]);
+  const ac={};f.forEach(r=>{if(r.acente)ac[r.acente]=(ac[r.acente]||0)+1});
+  $('acBar').innerHTML=barHTML(Object.entries(ac).sort((a,b)=>b[1]-a[1]).slice(0,8),k=>k);
+  if(isAdmin){const um={};f.forEach(r=>{if(r.uw_ad)um[r.uw_ad]=(um[r.uw_ad]||0)+1});$('bolBar').innerHTML=barHTML(Object.entries(um).sort((a,b)=>b[1]-a[1]),k=>k);}
+  else{const bm={};f.forEach(r=>{if(r.bolge)bm[r.bolge]=(bm[r.bolge]||0)+1});$('bolBar').innerHTML=barHTML(Object.entries(bm).sort((a,b)=>b[1]-a[1]),k=>k);}
+  const ins=[];const acs=Object.entries(ac).sort((a,b)=>b[1]-a[1]);
+  if(acs.length)ins.push('<div class="insight">En aktif acente: <b>'+esc(acs[0][0].split(' ')[0])+'...</b> · '+acs[0][1]+' görüşme</div>');
+  if(f.length){ins.push('<div class="insight">Yeni iş odaklı oran: <b>%'+Math.round(yeni/f.length*100)+'</b></div>');
+    const amax=Object.entries(aym).sort((a,b)=>b[1]-a[1])[0];if(amax)ins.push('<div class="insight">En yoğun ay: <b>'+AYLAR[+amax[0]]+'</b> ('+amax[1]+')</div>');
+    const wa=f.filter(r=>r.akis).length;ins.push('<div class="insight">Akış no\u0027lu görüşme: <b>'+wa+'</b></div>');}
+  $('ins').innerHTML=ins.join('')||'<div class="empty">Kayıt yok</div>';
+  $('rc').textContent=f.length;
+  const canEdit=(CUR.rol==='uw');
+  $('recs').innerHTML=f.length?f.slice().reverse().map(r=>{
+    let tc='tag tur-yeni';if((r.tur||'').toLowerCase()==='yenileme')tc='tag tur-yen';
+    const kioTag=r.kio_mu?'<span class="tag" style="background:#0a7d32;color:#fff">KİO ✓</span>':'<span class="tag" style="background:#fff;color:#a16207;border:1px solid #eab308">Liste dışı</span>';
+    return '<div class="rec"><div class="top">'+
+      (r.tarih?'<span class="tag tarih">'+r.tarih+'</span>':'')+
+      kioTag+
+      (isAdmin&&r.uw_ad?'<span class="tag uw">'+esc(r.uw_ad)+'</span>':'')+
+      (r.bolge?'<span class="tag bolge">'+esc(r.bolge)+'</span>':'')+
+      (r.tur?'<span class="'+tc+'">'+esc(r.tur)+'</span>':'')+
+      (r.akis?'<span class="tag akis">'+esc(r.akis)+'</span>':'')+'</div>'+
+      '<div class="acente">'+esc(r.acente)+'</div>'+
+      (r.kisi?'<div class="kisi">👤 '+esc(r.kisi)+'</div>':'')+
+      (r.konu?'<div class="konu">'+esc(r.konu)+'</div>':'')+
+      (r.sonuc?'<div class="sonuc">'+esc(r.sonuc)+'</div>':'')+
+      (canEdit?'<div class="actions"><button class="edit" onclick="editRec(\''+r.id+'\')">Düzenle</button><button class="del" onclick="delRec(\''+r.id+'\')">Sil</button></div>':'')+
+    '</div>';}).join(''):'<div class="empty">Görüşme bulunamadı.</div>';
+}
+async function delRec(id){if(!confirm('Bu görüşme silinsin mi?'))return;try{await api('delete',{payload:{id}});showView('benim');}catch(e){alert(e.error||'Silinemedi')}}
+let EDIT=null;
+function editRec(id){EDIT=ROWS.find(r=>r.id===id);qa('.tab').forEach(x=>x.classList.remove('on'));[...qa('.tab')].find(t=>t.dataset.v==='ekle')?.classList.add('on');showView('ekle');}
+
+function renderForm(){
+  const e=EDIT||{};const today=new Date().toISOString().slice(0,10);
+  $('view').innerHTML=`
+    <div class="formcard">
+      <h2>${EDIT?'✏️ Görüşme Düzenle':'➕ Yeni Görüşme Kaydı'}</h2>
+      <div class="formgrid">
+        <div><label>Tarih</label><input type="date" id="iTarih" value="${e.tarih||today}"></div>
+        <div><label>Bölge</label><select id="iBolge">${BOLGELER.map(b=>'<option'+(e.bolge===b?' selected':'')+'>'+b+'</option>').join('')}</select></div>
+        <div><label>İş Türü</label><select id="iTur"><option value="">— Seç —</option>${TURLER.map(t=>'<option'+(e.tur===t?' selected':'')+'>'+t+'</option>').join('')}</select></div>
+        <div class="full"><label>Görüşülen Acente</label><input id="iAcente" value="${esc(e.acente||'')}" placeholder="Acente unvanı"></div>
+        <div><label>Görüşülen Kişi</label><input id="iKisi" value="${esc(e.kisi||'')}" placeholder="Ad Soyad"></div>
+        <div><label>Akış No</label><input id="iAkis" value="${esc(e.akis||'')}" placeholder="KTT...... (varsa)"></div>
+        <div class="full"><label>Konu</label><textarea id="iKonu" placeholder="Görüşme konusu">${esc(e.konu||'')}</textarea></div>
+        <div class="full"><label>Sonuç</label><textarea id="iSonuc" placeholder="Görüşme sonucu / aksiyon">${esc(e.sonuc||'')}</textarea></div>
+      </div>
+      <button class="save" id="saveBtn" onclick="saveForm()">${EDIT?'Güncelle':'Kaydet'}</button>
+      ${EDIT?'<button class="cancel" onclick="EDIT=null;showView(\'ekle\')">İptal</button>':''}
+      <span id="formMsg" style="margin-left:14px;font-size:13px;color:var(--green);font-weight:600"></span>
+    </div>`;
+}
+async function saveForm(){
+  const ac=$('iAcente').value.trim();if(!ac){alert('Acente alanı zorunlu.');return;}
+  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:$('iKonu').value.trim(),sonuc:$('iSonuc').value.trim()};
+  $('saveBtn').disabled=true;
+  try{
+    if(EDIT){await api('update',{payload:p});EDIT=null;$('formMsg').textContent='✓ Güncellendi';}
+    else{await api('add',{payload:p});$('formMsg').textContent='✓ Kaydedildi';['iAcente','iKisi','iAkis','iKonu','iSonuc'].forEach(i=>$(i).value='');}
+  }catch(e){alert(e.error||'Kaydedilemedi')}
+  $('saveBtn').disabled=false;setTimeout(()=>{if($('formMsg'))$('formMsg').textContent=''},2500);
+}
+
+function renderUpload(){
+  $('view').innerHTML=`
+    <div class="uploadbar">
+      <label class="up" for="xfile">📁 Excel Seç</label>
+      <input type="file" id="xfile" accept=".xlsx,.xls">
+      <span class="note">Kolonlar: UW · TARİH · BÖLGE · GÖRÜŞÜLEN ACENTE · GÖRÜŞME YAPILAN KİŞİ · AKIŞ NO · YENİ İŞ - YENİLEME · KONU · SONUÇ — kayıtlar sizin adınıza eklenir</span>
+    </div><div id="upResult"></div>`;
+  $('xfile').addEventListener('change',handleUpload);
+}
+function handleUpload(e){
+  const file=e.target.files[0];if(!file)return;
+  $('upResult').innerHTML='<div class="loading">İşleniyor...</div>';
+  const rd=new FileReader();
+  rd.onload=async ev=>{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    const items=[];
+    rows.forEach(row=>{let t=pick(row,COLMAP.tarih);if(t instanceof Date)t=t.toISOString().slice(0,10);else t=norm(t);const ac=norm(pick(row,COLMAP.acente));if(!ac)return;
+      items.push({tarih:t,bolge:norm(pick(row,COLMAP.bolge)),acente:ac,kisi:norm(pick(row,COLMAP.kisi)),akis:norm(pick(row,COLMAP.akis)),tur:norm(pick(row,COLMAP.tur)),konu:norm(pick(row,COLMAP.konu)),sonuc:norm(pick(row,COLMAP.sonuc))});});
+    try{const r=await api('bulk',{payload:{items}});$('upResult').innerHTML='<div class="insight"><b>'+r.added+'</b> görüşme eklendi. "Görüşmelerim" sekmesinden görebilirsiniz.</div>';}
+    catch(er){$('upResult').innerHTML='<div class="empty">Hata: '+(er.error||'yükleme')+'</div>';}
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+function renderUwCompare(){
+  const uws=uniq(ROWS.map(r=>r.uw_ad));
+  const rows=uws.map(u=>{const d=ROWS.filter(r=>r.uw_ad===u);return{u,t:d.length,
+    yeni:d.filter(r=>(r.tur||'').toLowerCase().includes('yeni iş')).length,
+    yen:d.filter(r=>(r.tur||'').toLowerCase()==='yenileme').length,
+    ac:uniq(d.map(r=>r.acente)).length,akis:d.filter(r=>r.akis).length,
+    aylar:uniq(d.map(r=>r.ay).filter(a=>a>0)).length};}).sort((a,b)=>b.t-a.t);
+  const mx=Math.max(1,...rows.map(r=>r.t));
+  $('view').innerHTML=`
+    <div class="panel"><h2>UW Karşılaştırma Tablosu</h2><div class="body" style="padding:14px 16px">
+      <table class="cmp"><thead><tr><th>UW</th><th>Toplam</th><th>Yeni İş</th><th>Yenileme</th><th>Acente</th><th>Akış No\u0027lu</th><th>Aktif Ay</th><th style="width:140px">Hacim</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr><td style="font-weight:700">${esc(r.u)}</td><td>${r.t}</td><td style="color:var(--red);font-weight:700">${r.yeni}</td><td style="color:var(--green);font-weight:700">${r.yen}</td><td>${r.ac}</td><td>${r.akis}</td><td>${r.aylar}</td><td><div style="background:var(--soft);border-radius:4px;height:16px;overflow:hidden"><div style="height:100%;width:${r.t/mx*100}%;background:linear-gradient(90deg,var(--red),#e0364f)"></div></div></td></tr>`).join('')}</tbody></table>
+    </div></div>
+    <div class="panel" style="margin-top:18px"><h2>Çıkarımlar</h2><div class="body">
+      ${rows.length?'<div class="insight">En aktif UW: <b>'+esc(rows[0].u)+'</b> ('+rows[0].t+' görüşme)</div>':''}
+      <div class="insight">Toplam '+ROWS.length+' görüşme · '+uws.length+' UW · '+uniq(ROWS.map(r=>r.acente)).length+' farklı acente</div>
+    </div></div>`;
+}
+
+async function renderKioTakip(){
+  $('view').innerHTML='<div class="loading">KİO listesi yükleniyor...</div>';
+  let data;
+  try{data=await api('kio_durum');}catch(e){$('view').innerHTML='<div class="empty">Hata: '+(e.error||'')+'</div>';return;}
+  const kio=data.kio||[], dis=data.dis||[];
+  const arandi=kio.filter(k=>k.arandi), aranmadi=kio.filter(k=>!k.arandi);
+  const oran=kio.length?Math.round(arandi.length/kio.length*100):0;
+  // bölge dağılımı (aranmayanlar)
+  const bolgeAranmadi={};aranmadi.forEach(k=>{const b=k.sompo_bolge||'?';bolgeAranmadi[b]=(bolgeAranmadi[b]||0)+1});
+  $('view').innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="v">${kio.length}</div><div class="l">Toplam KİO Acente</div></div>
+      <div class="kpi"><div class="v" style="color:var(--green)">${arandi.length}</div><div class="l">Arandı</div></div>
+      <div class="kpi"><div class="v" style="color:#a16207">${aranmadi.length}</div><div class="l">Henüz Aranmadı</div></div>
+      <div class="kpi"><div class="v">%${oran}</div><div class="l">Kapsama</div></div>
+      <div class="kpi"><div class="v" style="color:var(--red)">${dis.length}</div><div class="l">Liste Dışı Aranan</div></div>
+    </div>
+    <div class="filters" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+      <div class="f"><label>Durum</label><select id="kDurum"><option value="">Tümü</option><option value="1">✓ Arananlar</option><option value="0">⬜ Aranmayanlar</option></select></div>
+      <div class="f"><label>Sompo Bölge</label><select id="kBolge"></select></div>
+      <div class="f"><label>İl</label><select id="kIl"></select></div>
+      <div class="f"><label>Ara</label><input id="kSearch" placeholder="acente adı..."></div>
+      <button class="reset" id="kReset">Sıfırla</button>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h2>KİO Acente Listesi <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="kCount"></span></h2>
+        <div id="kList" style="max-height:560px;overflow:auto"></div></div>
+      <div class="panel"><h2>Aranmayan KİO — Bölge Dağılımı</h2><div class="body" id="kBolgeBar"></div>
+        <h2 style="border-top:1px solid var(--line)">Liste Dışı Aranan Acenteler</h2><div id="kDis"></div></div>
+    </div>`;
+  window._KIO=kio;window._DIS=dis;
+  // selects
+  $('kBolge').innerHTML='<option value="">Tüm Bölgeler</option>'+uniq(kio.map(k=>k.sompo_bolge)).map(b=>'<option>'+esc(b)+'</option>').join('');
+  $('kIl').innerHTML='<option value="">Tüm İller</option>'+uniq(kio.map(k=>k.il)).map(b=>'<option>'+esc(b)+'</option>').join('');
+  // bölge bar (aranmayan)
+  const be=Object.entries(bolgeAranmadi).sort((a,b)=>b[1]-a[1]);
+  const mx=Math.max(1,...be.map(e=>e[1]));
+  $('kBolgeBar').innerHTML=be.length?be.map(e=>'<div class="bar"><span class="name">'+esc(e[0])+'</span><span class="track"><span class="fill" style="width:'+(e[1]/mx*100)+'%;background:linear-gradient(90deg,#a16207,#eab308)"></span></span><span class="num">'+e[1]+'</span></div>').join(''):'<div class="empty">Hepsi arandı 🎉</div>';
+  // liste dışı
+  $('kDis').innerHTML=dis.length?dis.sort((a,b)=>b.gorusme_sayisi-a.gorusme_sayisi).map(d=>'<div class="rec" style="padding:10px 16px"><div class="acente" style="font-size:13px">'+esc(d.acente)+'</div><div class="kisi">'+d.gorusme_sayisi+' görüşme · son: '+(d.son_gorusme||'-')+'</div></div>').join(''):'<div class="empty">Liste dışı arama yok</div>';
+  const drawList=()=>{
+    const fd=$('kDurum').value,fb=$('kBolge').value,fi=$('kIl').value,fs=$('kSearch').value.toLowerCase().trim();
+    let l=window._KIO.filter(k=>{
+      if(fd==='1'&&!k.arandi)return false;if(fd==='0'&&k.arandi)return false;
+      if(fb&&k.sompo_bolge!==fb)return false;if(fi&&k.il!==fi)return false;
+      if(fs&&!(k.ad||'').toLowerCase().includes(fs))return false;return true;});
+    l=l.sort((a,b)=>(a.arandi-b.arandi)|| (a.ad>b.ad?1:-1));
+    $('kCount').textContent=l.length+' acente';
+    $('kList').innerHTML=l.length?l.map(k=>{
+      const dot=k.arandi?'<span style="color:var(--green);font-weight:700">✓</span>':'<span style="color:#a16207;font-weight:700">○</span>';
+      const info=k.arandi?(k.gorusme_sayisi+' görüşme · son '+k.son_gorusme):'henüz aranmadı';
+      return '<div class="rec" style="padding:10px 16px;display:flex;align-items:center;gap:10px"><div style="font-size:16px">'+dot+'</div><div style="flex:1"><div class="acente" style="font-size:13px">'+esc(k.ad)+'</div><div class="kisi">'+esc(k.il||'')+' · '+esc(k.sompo_bolge||'')+' · '+esc(k.hangi_brans||'')+'</div></div><div style="font-size:11px;color:var(--muted);text-align:right;min-width:90px">'+info+'</div></div>';
+    }).join(''):'<div class="empty">Eşleşen yok</div>';
+  };
+  ['kDurum','kBolge','kIl','kSearch'].forEach(id=>$(id).addEventListener('input',drawList));
+  $('kReset').onclick=()=>{['kDurum','kBolge','kIl'].forEach(i=>$(i).value='');$('kSearch').value='';drawList()};
+  drawList();
+}
+
+function renderRapor(){
+  $('view').innerHTML=`
+    <div class="formcard"><h2>📤 Rapor Çıktısı</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Tüm görüşme verisini dışa aktar.</p>
+      <div class="toolbar">
+        <button class="primary" onclick="exportXlsx()">⬇ Görüşmeler (.xlsx)</button>
+        <button onclick="exportCsv()">⬇ CSV</button>
+        <button onclick="exportKio()">⬇ KİO Takip Listesi</button>
+        <button onclick="window.print()">🖨 Yazdır / PDF</button>
+      </div>
+      <div class="insight">Toplam <b>${ROWS.length}</b> kayıt · <b>${uniq(ROWS.map(r=>r.uw_ad)).length}</b> UW</div>
+    </div>`;
+}
+function expRows(){return ROWS.map(r=>({'UW':r.uw_ad,'TARİH':r.tarih,'BÖLGE':r.bolge,'GÖRÜŞÜLEN ACENTE':r.acente,'GÖRÜŞME YAPILAN KİŞİ':r.kisi,'AKIŞ NO':r.akis,'YENİ İŞ - YENİLEME':r.tur,'KONU':r.konu,'SONUÇ':r.sonuc}))}
+function exportXlsx(){const ws=XLSX.utils.json_to_sheet(expRows());const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'ARAMALAR');XLSX.writeFile(wb,'acente_aramalar_export.xlsx');}
+function exportCsv(){const ws=XLSX.utils.json_to_sheet(expRows());const csv=XLSX.utils.sheet_to_csv(ws);const b=new Blob(['\ufeff'+csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='acente_aramalar.csv';a.click();}
+async function exportKio(){
+  try{const d=await api('kio_durum');
+    const rows=(d.kio||[]).map(k=>({'KİO ACENTE':k.ad,'İL':k.il,'SOMPO BÖLGE':k.sompo_bolge,'BRANŞ':k.hangi_brans,'DURUM':k.arandi?'Arandı':'Aranmadı','GÖRÜŞME SAYISI':k.gorusme_sayisi,'SON GÖRÜŞME':k.son_gorusme||''}));
+    const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'KIO_TAKIP');XLSX.writeFile(wb,'kio_takip_listesi.xlsx');
+  }catch(e){alert(e.error||'Hata')}
+}
+
+// boot
+initLogin();
+const sc=sessionStorage.getItem('acur');
+if(sc){try{const o=JSON.parse(sc);CUR=o.u;PASS=o.p;enterApp();}catch(e){}}
+</script>
+</body>
+</html>
