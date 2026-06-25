@@ -172,7 +172,7 @@ async function enterApp(){
 }
 function buildTabs(){
   let tabs;
-  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
+  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['hedef','🏆 Hedefler'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
   else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
   $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
   qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
@@ -185,6 +185,7 @@ async function showView(v){
     if(v==='benim'){await loadRows(true);renderDashboard(false);}
     else if(v==='ozet'){await loadRows(false);renderDashboard(true);}
     else if(v==='kio'){await renderKioTakip();}
+    else if(v==='hedef'){await renderHedef();}
     else if(v==='uwkarsi'){await loadRows();renderUwCompare();}
     else if(v==='rapor'){await loadRows();renderRapor();}
     else if(v==='ekle')renderForm();
@@ -464,6 +465,59 @@ async function renderKioTakip(){
   drawList();
 }
 
+async function renderHedef(){
+  const now=new Date();
+  window._HY=window._HY||now.getFullYear();
+  window._HA=window._HA||(now.getMonth()+1);
+  $('view').innerHTML='<div class="loading">Hedefler yükleniyor...</div>';
+  let data;
+  try{data=await api('hedef_list',{payload:{yil:window._HY,ay:window._HA}});}
+  catch(e){$('view').innerHTML='<div class="empty">Hata: '+(e.error||'')+'</div>';return;}
+  const liste=data.liste||[];
+  const toplamHedef=liste.reduce((s,u)=>s+u.hedef,0);
+  const toplamGerc=liste.reduce((s,u)=>s+u.gerceklesen,0);
+  const yillar=[now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1];
+  $('view').innerHTML=`
+    <div class="filters" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+      <div class="f"><label>Yıl</label><select id="hYil">${yillar.map(y=>'<option'+(y===data.yil?' selected':'')+'>'+y+'</option>').join('')}</select></div>
+      <div class="f"><label>Ay</label><select id="hAy">${AYLAR.slice(1).map((a,i)=>'<option value="'+(i+1)+'"'+((i+1)===data.ay?' selected':'')+'>'+a+'</option>').join('')}</select></div>
+      <div class="f" style="align-self:end"><button class="reset" id="hKaydet" style="background:var(--red);color:#fff;border-color:var(--red)">💾 Hedefleri Kaydet</button></div>
+      <div class="f" style="align-self:end"><span id="hMsg" style="font-size:13px;color:var(--green);font-weight:600"></span></div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="v">${toplamHedef}</div><div class="l">Toplam Hedef (${AYLAR[data.ay]})</div></div>
+      <div class="kpi"><div class="v" style="color:var(--green)">${toplamGerc}</div><div class="l">Gerçekleşen</div></div>
+      <div class="kpi"><div class="v">%${toplamHedef?Math.round(toplamGerc/toplamHedef*100):0}</div><div class="l">Genel İlerleme</div></div>
+    </div>
+    <div class="panel"><h2>UW Aylık Arama Hedefleri — ${AYLAR[data.ay]} ${data.yil}</h2><div class="body" style="padding:14px 16px">
+      <table class="cmp"><thead><tr><th>UW</th><th style="width:110px">Hedef</th><th>Gerçekleşen</th><th style="width:200px">İlerleme</th><th style="width:70px">%</th></tr></thead>
+      <tbody>${liste.map(u=>{
+        const yuzde=u.hedef?Math.round(u.gerceklesen/u.hedef*100):0;
+        const renk=yuzde>=100?'#0a7d32':(yuzde>=60?'#eab308':'#C8102E');
+        return `<tr>
+          <td style="font-weight:700">${esc(u.ad)}${u.rol==='admin'?' ★':''}</td>
+          <td><input type="number" min="0" class="hInput" data-uw="${u.uw_id}" value="${u.hedef}" style="width:80px;padding:5px 8px;border:1px solid var(--line);border-radius:5px;font-size:13px"></td>
+          <td style="font-weight:700;color:var(--green)">${u.gerceklesen}</td>
+          <td><div style="background:var(--soft);border-radius:4px;height:16px;overflow:hidden"><div style="height:100%;width:${Math.min(100,yuzde)}%;background:${renk}"></div></div></td>
+          <td style="font-weight:700;color:${renk}">${yuzde}%</td>
+        </tr>`;}).join('')}</tbody></table>
+    </div></div>`;
+  const reload=()=>{window._HY=parseInt($('hYil').value,10);window._HA=parseInt($('hAy').value,10);renderHedef();};
+  $('hYil').addEventListener('change',reload);
+  $('hAy').addEventListener('change',reload);
+  $('hKaydet').onclick=async()=>{
+    $('hKaydet').disabled=true;$('hMsg').textContent='Kaydediliyor...';
+    try{
+      const inputs=[...document.querySelectorAll('.hInput')];
+      for(const inp of inputs){
+        await api('hedef_set',{payload:{yil:window._HY,ay:window._HA,uw_id_hedef:inp.dataset.uw,hedef:parseInt(inp.value,10)||0}});
+      }
+      $('hMsg').textContent='✓ Kaydedildi';
+    }catch(e){$('hMsg').textContent='Hata: '+(e.error||'');}
+    $('hKaydet').disabled=false;setTimeout(()=>{if($('hMsg'))$('hMsg').textContent='';},2500);
+  };
+}
+
 function renderRapor(){
   $('view').innerHTML=`
     <div class="formcard"><h2>📤 Rapor Çıktısı</h2>
@@ -475,7 +529,25 @@ function renderRapor(){
         <button onclick="printRapor()">🖨 Yazdır / PDF</button>
       </div>
       <div class="insight">Toplam <b>${ROWS.length}</b> kayıt · <b>${uniq(ROWS.map(r=>r.uw_ad)).length}</b> UW</div>
+    </div>
+    <div class="formcard">
+      <h2>🧠 AI Yönetsel Özet</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Tüm görüşme verisini yapay zekâ analiz edip yönetsel değerlendirme yazar. Birkaç saniye sürebilir.</p>
+      <button class="save" id="aiBtn" onclick="aiOzet()">✨ Özet Çıkar</button>
+      <div id="aiSonuc" style="margin-top:16px"></div>
     </div>`;
+}
+async function aiOzet(){
+  $('aiBtn').disabled=true;
+  $('aiSonuc').innerHTML='<div class="loading">Yapay zekâ veriyi analiz ediyor...</div>';
+  try{
+    const r=await api('ai_ozet');
+    const html=esc(r.ozet).replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+    $('aiSonuc').innerHTML='<div style="background:var(--soft);border:1px solid var(--line);border-left:3px solid var(--red);border-radius:8px;padding:16px 18px;font-size:14px;line-height:1.7"><p>'+html+'</p></div>';
+  }catch(e){
+    $('aiSonuc').innerHTML='<div class="empty">Hata: '+(e.error||'')+(e.detail?' — API anahtarı Vercel\\u0027e eklendi mi?':'')+'</div>';
+  }
+  $('aiBtn').disabled=false;
 }
 function expRows(){return ROWS.map(r=>({'UW':r.uw_ad,'TARİH':r.tarih,'BÖLGE':r.bolge,'GÖRÜŞÜLEN ACENTE':r.acente,'KİO':r.kio_mu?'Evet':'Hayır','GÖRÜŞME YAPILAN KİŞİ':r.kisi,'AKIŞ NO':r.akis,'YENİ İŞ - YENİLEME':r.tur,'DURUM':r.durum,'PRİM':r.prim!=null?r.prim:'','KONU':r.konu,'SONUÇ':r.sonuc}))}
 function exportXlsx(){const ws=XLSX.utils.json_to_sheet(expRows());const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'ARAMALAR');XLSX.writeFile(wb,'acente_aramalar_export.xlsx');}
