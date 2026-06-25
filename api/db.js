@@ -118,6 +118,98 @@ module.exports = async (req, res) => {
       return res.json({ ok: true });
     }
 
+    // --- HEDEFLERİ GETİR ---
+    if (action === 'hedef_list') {
+      const p = payload || {};
+      const yil = p.yil || new Date().getFullYear();
+      const ay = p.ay || (new Date().getMonth() + 1);
+      // tüm UW'ler + bu ay hedefi + bu ay gerçekleşen
+      const users = await sb('acente_uw?select=id,ad,rol&aktif=eq.true&order=ad.asc');
+      const hedefler = await sb(`acente_hedef?select=uw_id,hedef&yil=eq.${yil}&ay=eq.${ay}`);
+      const hedefMap = {}; hedefler.forEach(h => hedefMap[h.uw_id] = h.hedef);
+      // bu ay gerçekleşen görüşmeler (uw bazlı)
+      const gor = await sb(`acente_gorusmeler?select=uw_id&yil=eq.${yil}&ay=eq.${ay}`);
+      const gMap = {}; gor.forEach(g => gMap[g.uw_id] = (gMap[g.uw_id] || 0) + 1);
+      const liste = users.map(u => ({
+        uw_id: u.id, ad: u.ad, rol: u.rol,
+        hedef: hedefMap[u.id] || 0,
+        gerceklesen: gMap[u.id] || 0
+      }));
+      return res.json({ yil, ay, liste });
+    }
+
+    // --- HEDEF KAYDET (admin) ---
+    if (action === 'hedef_set') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin hedef belirleyebilir' });
+      const p = payload || {};
+      const yil = p.yil, ay = p.ay, hedefUw = p.uw_id_hedef, hedef = parseInt(p.hedef, 10) || 0;
+      if (!yil || !ay || !hedefUw) return res.status(400).json({ error: 'Eksik bilgi' });
+      await sb('acente_hedef', {
+        method: 'POST',
+        body: JSON.stringify({ uw_id: hedefUw, yil, ay, hedef }),
+        prefer: 'resolution=merge-duplicates,return=minimal',
+        headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
+      });
+      return res.json({ ok: true });
+    }
+
+    // --- AI YÖNETSEL ÖZET (admin) ---
+    if (action === 'ai_ozet') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY tanımlı değil' });
+      // veriyi topla
+      const rows = await sb('acente_gorusmeler_kio?select=uw_id,tarih,ay,bolge,acente,tur,durum,prim,kio_mu,acente_uw(ad)&order=tarih.desc&limit=500');
+      const kioAll = await sb('acente_kio?select=kod');
+      // özet istatistik çıkar (token tasarrufu için ham değil özet gönderiyoruz)
+      const stat = { toplam: rows.length, uw: {}, ay: {}, bolge: {}, durum: {}, kio: 0, dis: 0, prim: 0, acente: {} };
+      rows.forEach(r => {
+        const uw = r.acente_uw?.ad || r.uw_id;
+        stat.uw[uw] = (stat.uw[uw] || 0) + 1;
+        if (r.ay) stat.ay[r.ay] = (stat.ay[r.ay] || 0) + 1;
+        if (r.bolge) stat.bolge[r.bolge] = (stat.bolge[r.bolge] || 0) + 1;
+        if (r.durum) stat.durum[r.durum] = (stat.durum[r.durum] || 0) + 1;
+        if (r.acente) stat.acente[r.acente] = (stat.acente[r.acente] || 0) + 1;
+        if (r.kio_mu) stat.kio++; else stat.dis++;
+        if (r.durum === 'Poliçe Bağlandı') stat.prim += Number(r.prim) || 0;
+      });
+      const kioArananKod = new Set(rows.filter(r => r.kio_mu && r.kio_kod).map(r => r.kio_kod));
+      const topAcente = Object.entries(stat.acente).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      const AYLAR = ['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+      const ayStr = Object.entries(stat.ay).sort((a,b)=>a[0]-b[0]).map(([k,v])=>`${AYLAR[k]}: ${v}`).join(', ');
+
+      const prompt = `Sen Sompo Sigorta Endüstriyel Riskler (Yangın) biriminde bir yönetici asistanısın. Aşağıda underwriter (UW) ekibinin acente arama/görüşme verilerinin özeti var. Bu veriye dayanarak Türkçe, kısa ve yönetsel bir değerlendirme yaz. Yöneticinin (Kıdemli Müdür) hızlıca okuyup aksiyon alabileceği netlikte olsun. Abartısız, veriye dayalı, samimi ama profesyonel.
+
+VERİ ÖZETİ:
+- Toplam görüşme: ${stat.toplam}
+- KİO listesindeki acentelerle: ${stat.kio} · Liste dışı: ${stat.dis}
+- Toplam KİO acente sayısı: ${kioAll.length} · Bunlardan arananlar: ${kioArananKod.size} (kapsama %${Math.round(kioArananKod.size/kioAll.length*100)})
+- UW dağılımı: ${Object.entries(stat.uw).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${v}`).join(', ')}
+- Aylık dağılım: ${ayStr}
+- Bölge dağılımı: ${Object.entries(stat.bolge).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${v}`).join(', ')}
+- Durum/aşama dağılımı: ${Object.entries(stat.durum).map(([k,v])=>`${k}: ${v}`).join(', ')}
+- Bağlanan toplam prim: ${stat.prim.toLocaleString('tr-TR')} TL
+- En aktif acenteler: ${topAcente.map(([k,v])=>`${k.split(' ')[0]} (${v})`).join(', ')}
+
+İSTENEN ÇIKTI (madde başları halinde, toplam ~200 kelime):
+1. Genel durum (1-2 cümle)
+2. Öne çıkanlar (en aktif UW, momentum, güçlü taraflar)
+3. Dikkat gerektirenler (KİO kapsama boşlukları, dönüşüm zayıflıkları, az aranan bölgeler)
+4. Önerilen aksiyonlar (2-3 somut madde)
+
+Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
+
+      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] })
+      });
+      const aiData = await aiRes.json();
+      if (!aiRes.ok) return res.status(500).json({ error: 'AI hatası', detail: aiData });
+      const text = (aiData.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      return res.json({ ok: true, ozet: text, meta: { toplam: stat.toplam, kapsama: Math.round(kioArananKod.size/kioAll.length*100) } });
+    }
+
     // --- EKLE ---
     if (action === 'add') {
       const p = payload || {};
