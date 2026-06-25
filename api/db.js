@@ -82,33 +82,54 @@ module.exports = async (req, res) => {
 
     // --- KİO ACENTE LİSTESİ + ARANMA DURUMU ---
     if (action === 'kio_durum') {
+      const now = new Date();
+      const buYil = (payload && payload.yil) || now.getFullYear();
+      const buAy = (payload && payload.ay) || (now.getMonth() + 1);
       // tüm KİO acenteleri
       const kio = await sb('acente_kio?select=kod,ad,il,sompo_bolge,hangi_brans,kac_brans&order=ad.asc');
-      // hangi KİO kodları görüşülmüş (view üzerinden)
-      const gor = await sb('acente_gorusmeler_kio?select=kio_kod,tarih,uw_id&kio_kod=not.is.null');
-      const arananKod = {};
+      // hangi KİO kodları görüşülmüş (view üzerinden) — tarih ile
+      const gor = await sb('acente_gorusmeler_kio?select=kio_kod,tarih,ay,yil,uw_id&kio_kod=not.is.null');
+      const arananKod = {};      // yıl başından bugüne (bu yıl)
+      const arananKodAy = {};    // bu ay
       gor.forEach(g => {
         if (!g.kio_kod) return;
-        if (!arananKod[g.kio_kod]) arananKod[g.kio_kod] = { sayi: 0, son: null };
-        arananKod[g.kio_kod].sayi++;
-        if (!arananKod[g.kio_kod].son || g.tarih > arananKod[g.kio_kod].son) arananKod[g.kio_kod].son = g.tarih;
+        // YIL: bu yıla ait olanlar
+        if (g.yil === buYil) {
+          if (!arananKod[g.kio_kod]) arananKod[g.kio_kod] = { sayi: 0, son: null };
+          arananKod[g.kio_kod].sayi++;
+          if (!arananKod[g.kio_kod].son || g.tarih > arananKod[g.kio_kod].son) arananKod[g.kio_kod].son = g.tarih;
+        }
+        // AY: bu yıl + bu ay
+        if (g.yil === buYil && g.ay === buAy) {
+          if (!arananKodAy[g.kio_kod]) arananKodAy[g.kio_kod] = { sayi: 0, son: null };
+          arananKodAy[g.kio_kod].sayi++;
+          if (!arananKodAy[g.kio_kod].son || g.tarih > arananKodAy[g.kio_kod].son) arananKodAy[g.kio_kod].son = g.tarih;
+        }
       });
       const liste = kio.map(k => ({
         ...k,
         arandi: !!arananKod[k.kod],
         gorusme_sayisi: arananKod[k.kod]?.sayi || 0,
-        son_gorusme: arananKod[k.kod]?.son || null
+        son_gorusme: arananKod[k.kod]?.son || null,
+        arandi_ay: !!arananKodAy[k.kod],
+        gorusme_sayisi_ay: arananKodAy[k.kod]?.sayi || 0
       }));
       // liste dışı aranan acenteler (KİO eşleşmeyen görüşmeler)
-      const disRows = await sb('acente_gorusmeler_kio?select=acente,tarih&kio_kod=is.null');
-      const disMap = {};
+      const disRows = await sb('acente_gorusmeler_kio?select=acente,tarih,ay,yil&kio_kod=is.null');
+      const disMap = {}; const disMapAy = {};
       disRows.forEach(r => {
-        if (!disMap[r.acente]) disMap[r.acente] = { sayi: 0, son: null };
-        disMap[r.acente].sayi++;
-        if (!disMap[r.acente].son || r.tarih > disMap[r.acente].son) disMap[r.acente].son = r.tarih;
+        if (r.yil === buYil) {
+          if (!disMap[r.acente]) disMap[r.acente] = { sayi: 0, son: null };
+          disMap[r.acente].sayi++;
+          if (!disMap[r.acente].son || r.tarih > disMap[r.acente].son) disMap[r.acente].son = r.tarih;
+        }
+        if (r.yil === buYil && r.ay === buAy) {
+          disMapAy[r.acente] = (disMapAy[r.acente] || 0) + 1;
+        }
       });
       const disListe = Object.entries(disMap).map(([acente, v]) => ({ acente, gorusme_sayisi: v.sayi, son_gorusme: v.son }));
-      return res.json({ kio: liste, dis: disListe });
+      const disAyAdet = Object.keys(disMapAy).length;
+      return res.json({ kio: liste, dis: disListe, buYil, buAy, disAyAdet });
     }
 
     // --- KİO MANUEL BAĞLAMA (admin) — bir acente adını bir KİO koduna eşle ---
