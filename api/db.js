@@ -74,6 +74,7 @@ module.exports = async (req, res) => {
         acente: r.acente, kisi: r.kisi, akis: r.akis_no, tur: r.tur,
         konu: r.konu, sonuc: r.sonuc,
         durum: r.durum || 'Görüşüldü', prim: r.prim,
+        secili_kio_kod: r.secili_kio_kod,
         kio_mu: r.kio_mu === true, kio_kod: r.kio_kod, kio_ad: r.kio_ad, kio_brans: r.kio_brans
       }));
       return res.json({ rows: mapped, isAdmin });
@@ -116,6 +117,23 @@ module.exports = async (req, res) => {
       const p = payload || {};
       // ileride: acente takma adı tablosu. Şimdilik no-op placeholder.
       return res.json({ ok: true });
+    }
+
+    // --- BÖLGEYE GÖRE KİO ACENTELERİ (form açılır liste için) ---
+    if (action === 'kio_bolge') {
+      const bolge = (payload || {}).bolge || '';
+      let q = 'acente_kio?select=kod,ad,il,sompo_bolge,hangi_brans&order=ad.asc';
+      if (bolge) q += `&sompo_bolge=eq.${encodeURIComponent(bolge)}`;
+      const list = await sb(q);
+      return res.json({ kio: list });
+    }
+    if (action === 'hedef_benim') {
+      const p = payload || {};
+      const yil = p.yil || new Date().getFullYear();
+      const ay = p.ay || (new Date().getMonth() + 1);
+      const h = await sb(`acente_hedef?select=hedef&uw_id=eq.${encodeURIComponent(uw_id)}&yil=eq.${yil}&ay=eq.${ay}`);
+      const g = await sb(`acente_gorusmeler?select=id&uw_id=eq.${encodeURIComponent(uw_id)}&yil=eq.${yil}&ay=eq.${ay}`);
+      return res.json({ yil, ay, hedef: (h[0]?.hedef) || 0, gerceklesen: g.length });
     }
 
     // --- HEDEFLERİ GETİR ---
@@ -219,7 +237,8 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         tarih: p.tarih || null, bolge: p.bolge || null, acente: p.acente,
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
         konu: p.konu || null, sonuc: p.sonuc || null,
-        durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null
+        durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null,
+        secili_kio_kod: p.secili_kio_kod || null
       };
       const out = await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(rec) });
       return res.json({ ok: true, row: out[0] });
@@ -238,7 +257,8 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         tarih: p.tarih || null, bolge: p.bolge || null, acente: p.acente,
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
         konu: p.konu || null, sonuc: p.sonuc || null,
-        durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null
+        durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null,
+        secili_kio_kod: p.secili_kio_kod || null
       };
       const out = await sb(`acente_gorusmeler?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(upd) });
       return res.json({ ok: true, row: out[0] });
