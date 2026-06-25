@@ -133,7 +133,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const AYLAR=['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-const BOLGELER=['IST-AVR1','IST-AVR2','ADZ','IST-AND1','IST-AND2','MRM','EGE','FMB','GAP','OAB','KDZ','MBM'];
+const BOLGELER=['IST-AVR1','IST-AVR2','IST-AND1','IST-AND2','ADZ','EGE','GAB','MRM','OAB','KDZ'];
 const TURLER=['Yeni İş','Yenileme','Acente Ziyareti','Genel Görüşme'];
 const KONULAR=['Genel Görüşme','Yeni İş Teklifi','Yenileme Görüşmesi','Acente Ziyareti','RT Süreci / Takibi','Hasar / Dosya','Komisyon / Fiyat Pazarlığı','Tahsilat / Ödeme'];
 const DURUMLAR=['Görüşüldü','Teklif Verildi','RT Yapıldı','Poliçe Bağlandı','Kaybedildi','Beklemede'];
@@ -392,9 +392,12 @@ function renderForm(){
       <h2>${EDIT?'✏️ Görüşme Düzenle':'➕ Yeni Görüşme Kaydı'}</h2>
       <div class="formgrid">
         <div><label>Tarih</label><input type="date" id="iTarih" value="${e.tarih||today}"></div>
-        <div><label>Bölge</label><select id="iBolge">${BOLGELER.map(b=>'<option'+(e.bolge===b?' selected':'')+'>'+b+'</option>').join('')}</select></div>
+        <div><label>Bölge</label><select id="iBolge" onchange="kioBolgeYukle()">${BOLGELER.map(b=>'<option'+(e.bolge===b?' selected':'')+'>'+b+'</option>').join('')}</select></div>
         <div><label>İş Türü</label><select id="iTur"><option value="">— Seç —</option>${TURLER.map(t=>'<option'+(e.tur===t?' selected':'')+'>'+t+'</option>').join('')}</select></div>
-        <div class="full"><label>Görüşülen Acente</label><input id="iAcente" value="${esc(e.acente||'')}" placeholder="Acente unvanı"></div>
+        <div class="full"><label>Görüşülen Acente (KİO listesinden seç)</label>
+          <select id="iKioSec" onchange="kioSecildi()"><option value="">Yükleniyor...</option></select>
+          <div id="iAcenteSerbestWrap" style="display:none;margin-top:8px"><input id="iAcente" value="${esc(e.acente||'')}" placeholder="ACENTE ADI (BÜYÜK HARF)" oninput="this.value=this.value.toLocaleUpperCase('tr-TR')" style="text-transform:uppercase"></div>
+        </div>
         <div><label>Görüşülen Kişi</label><input id="iKisi" value="${esc(e.kisi||'')}" placeholder="Ad Soyad"></div>
         <div><label>Akış No</label><input id="iAkis" value="${esc(e.akis||'')}" placeholder="KTT...... (varsa)"></div>
         <div><label>Durum / Aşama</label><select id="iDurum">${DURUMLAR.map(d=>'<option'+(((e.durum||'Görüşüldü')===d)?' selected':'')+'>'+d+'</option>').join('')}</select></div>
@@ -408,17 +411,47 @@ function renderForm(){
       ${EDIT?'<button class="cancel" onclick="EDIT=null;showView(\'ekle\')">İptal</button>':''}
       <span id="formMsg" style="margin-left:14px;font-size:13px;color:var(--green);font-weight:600"></span>
     </div>`;
+  kioBolgeYukle();
+}
+window._KIOBOLGE=[];
+async function kioBolgeYukle(){
+  const bolge=$('iBolge')?$('iBolge').value:'';
+  const sel=$('iKioSec');if(!sel)return;
+  sel.innerHTML='<option value="">Yükleniyor...</option>';
+  try{
+    const r=await api('kio_bolge',{payload:{bolge}});
+    window._KIOBOLGE=r.kio||[];
+    const e=EDIT||{};
+    let opts='<option value="">— KİO acentesi seçin —</option>';
+    opts+=window._KIOBOLGE.map(k=>'<option value="'+k.kod+'"'+((e.secili_kio_kod===k.kod)?' selected':'')+'>'+esc(k.ad)+' · '+esc(k.il||'')+'</option>').join('');
+    opts+='<option value="__SERBEST__"'+((!e.secili_kio_kod&&e.acente)?' selected':'')+'>➕ Listede yok / KİO değil</option>';
+    sel.innerHTML=opts;
+    kioSecildi();
+  }catch(err){sel.innerHTML='<option value="__SERBEST__">➕ Listede yok / KİO değil</option>';kioSecildi();}
+}
+function kioSecildi(){
+  const sel=$('iKioSec');const wrap=$('iAcenteSerbestWrap');if(!sel||!wrap)return;
+  if(sel.value==='__SERBEST__'){wrap.style.display='block';}
+  else{wrap.style.display='none';}
 }
 async function saveForm(){
-  const ac=$('iAcente').value.trim();if(!ac){alert('Acente alanı zorunlu.');return;}
+  const sel=$('iKioSec');
+  let ac='', seciliKod=null;
+  if(sel && sel.value && sel.value!=='__SERBEST__'){
+    const k=(window._KIOBOLGE||[]).find(x=>x.kod===sel.value);
+    if(k){ac=k.ad;seciliKod=k.kod;}
+  }else{
+    ac=($('iAcente')?$('iAcente').value.trim().toLocaleUpperCase('tr-TR'):'');
+  }
+  if(!ac){alert('Acente seçin veya yazın.');return;}
   const kbas=$('iKonuBas').value;const knot=$('iKonuNot').value.trim();
   const konu=knot?(kbas+' — '+knot):kbas;
   const primVal=$('iPrim').value.trim();
-  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:konu,sonuc:$('iSonuc').value.trim(),durum:$('iDurum').value,prim:primVal===''?null:parseFloat(primVal)};
+  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,secili_kio_kod:seciliKod,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:konu,sonuc:$('iSonuc').value.trim(),durum:$('iDurum').value,prim:primVal===''?null:parseFloat(primVal)};
   $('saveBtn').disabled=true;
   try{
     if(EDIT){await api('update',{payload:p});EDIT=null;$('formMsg').textContent='✓ Güncellendi';}
-    else{await api('add',{payload:p});$('formMsg').textContent='✓ Kaydedildi';['iAcente','iKisi','iAkis','iKonuNot','iSonuc','iPrim'].forEach(i=>$(i).value='');}
+    else{await api('add',{payload:p});$('formMsg').textContent='✓ Kaydedildi';renderForm();}
   }catch(e){alert(e.error||'Kaydedilemedi')}
   $('saveBtn').disabled=false;setTimeout(()=>{if($('formMsg'))$('formMsg').textContent=''},2500);
 }
