@@ -124,6 +124,8 @@ const AYLAR=['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağu
 const BOLGELER=['IST-AVR1','IST-AVR2','ADZ','IST-AND1','IST-AND2','MRM','EGE','FMB','GAP','OAB','KDZ','MBM'];
 const TURLER=['Yeni İş','Yenileme','Acente Ziyareti','Genel Görüşme'];
 const KONULAR=['Genel Görüşme','Yeni İş Teklifi','Yenileme Görüşmesi','Acente Ziyareti','RT Süreci / Takibi','Hasar / Dosya','Komisyon / Fiyat Pazarlığı','Tahsilat / Ödeme'];
+const DURUMLAR=['Görüşüldü','Teklif Verildi','RT Yapıldı','Poliçe Bağlandı','Kaybedildi','Beklemede'];
+const DURUM_RENK={'Görüşüldü':'#71717a','Teklif Verildi':'#2563eb','RT Yapıldı':'#9333ea','Poliçe Bağlandı':'#0a7d32','Kaybedildi':'#C8102E','Beklemede':'#a16207'};
 const COLMAP={uw:['UW'],tarih:['TARİH','TARIH'],bolge:['BÖLGE','BOLGE'],acente:['GÖRÜŞÜLEN ACENTE'],kisi:['GÖRÜŞME YAPILAN KİŞİ'],akis:['AKIŞ NO'],tur:['YENİ İŞ - YENİLEME'],konu:['KONU'],sonuc:['SONUÇ']};
 const $=id=>document.getElementById(id);const qa=s=>document.querySelectorAll(s);
 let CUR=null, PASS=null, ROWS=[], USERS=[];
@@ -201,6 +203,7 @@ function renderDashboard(isAdmin){
       ${isAdmin?'<div class="f"><label>UW</label><select id="fUw"></select></div>':''}
       <div class="f"><label>İş Türü</label><select id="fTur"></select></div>
       <div class="f"><label>KİO</label><select id="fKio"><option value="">Tümü</option><option value="1">Sadece KİO</option><option value="0">Liste dışı</option></select></div>
+      <div class="f"><label>Durum</label><select id="fDurum"></select></div>
       <div class="f"><label>Acente</label><select id="fAcente"></select></div>
       <div class="f"><label>Ara</label><input id="fSearch" placeholder="firma, RT, OSB..."></div>
       <button class="reset" id="reset">Sıfırla</button>
@@ -211,7 +214,11 @@ function renderDashboard(isAdmin){
     </div>
     <div class="grid2">
       <div class="panel"><h2>${isAdmin?'UW Dağılımı':'Bölge Dağılımı'}</h2><div class="body" id="bolBar"></div></div>
+      <div class="panel"><h2>Satış Hunisi (Durum)</h2><div class="body" id="funnel"></div></div>
+    </div>
+    <div class="grid2">
       <div class="panel"><h2>Çıkarımlar</h2><div class="body" id="ins"></div></div>
+      <div class="panel"><h2>Prim / Dönüşüm</h2><div class="body" id="primPanel"></div></div>
     </div>
     <div class="panel records"><h2>Görüşme Dökümü <span class="count" id="rc">0</span></h2><div id="recs"></div></div>`;
   const aylar=uniq(ROWS.map(r=>r.ay).filter(a=>a>0)).sort((a,b)=>a-b);
@@ -219,9 +226,10 @@ function renderDashboard(isAdmin){
   $('fBolge').innerHTML='<option value="">Tümü (Bölge)</option>'+uniq(ROWS.map(r=>r.bolge)).map(v=>'<option>'+esc(v)+'</option>').join('');
   if(isAdmin)$('fUw').innerHTML='<option value="">Tümü (UW)</option>'+uniq(ROWS.map(r=>r.uw_ad)).map(v=>'<option>'+esc(v)+'</option>').join('');
   $('fTur').innerHTML='<option value="">Tümü (Tür)</option>'+uniq(ROWS.map(r=>r.tur)).map(v=>'<option>'+esc(v)+'</option>').join('');
+  $('fDurum').innerHTML='<option value="">Tümü (Durum)</option>'+DURUMLAR.map(v=>'<option>'+v+'</option>').join('');
   $('fAcente').innerHTML='<option value="">Tümü (Acente)</option>'+uniq(ROWS.map(r=>r.acente)).map(v=>'<option>'+esc(v)+'</option>').join('');
-  const ids=['fAy','fBolge','fTur','fKio','fAcente','fSearch'];if(isAdmin)ids.push('fUw');
-  const read=()=>{FILT={ay:$('fAy').value,bolge:$('fBolge').value,uw:isAdmin&&$('fUw')?$('fUw').value:'',tur:$('fTur').value,kio:$('fKio').value,acente:$('fAcente').value,q:$('fSearch').value.toLowerCase().trim()}};
+  const ids=['fAy','fBolge','fTur','fKio','fDurum','fAcente','fSearch'];if(isAdmin)ids.push('fUw');
+  const read=()=>{FILT={ay:$('fAy').value,bolge:$('fBolge').value,uw:isAdmin&&$('fUw')?$('fUw').value:'',tur:$('fTur').value,kio:$('fKio').value,durum:$('fDurum').value,acente:$('fAcente').value,q:$('fSearch').value.toLowerCase().trim()}};
   ids.forEach(id=>{if($(id))$(id).addEventListener('input',()=>{read();draw(isAdmin)})});
   $('reset').onclick=()=>{ids.forEach(i=>{if($(i))$(i).value=''});read();draw(isAdmin)};
   draw(isAdmin);
@@ -234,6 +242,7 @@ function applyF(){return ROWS.filter(r=>{
   if(FILT.acente&&r.acente!==FILT.acente)return false;
   if(FILT.kio==='1'&&!r.kio_mu)return false;
   if(FILT.kio==='0'&&r.kio_mu)return false;
+  if(FILT.durum&&r.durum!==FILT.durum)return false;
   if(FILT.q){const b=((r.konu||'')+' '+(r.sonuc||'')+' '+(r.acente||'')+' '+(r.kisi||'')+' '+(r.akis||'')).toLowerCase();if(!b.includes(FILT.q))return false;}
   return true;})}
 function barHTML(entries,lf){if(!entries.length)return '<div class="empty">Veri yok</div>';const mx=Math.max(1,...entries.map(e=>e[1]));return entries.map(e=>'<div class="bar"><span class="name" title="'+esc(lf(e[0]))+'">'+esc(lf(e[0]))+'</span><span class="track"><span class="fill" style="width:'+(e[1]/mx*100)+'%"></span></span><span class="num">'+e[1]+'</span></div>').join('')}
@@ -257,14 +266,40 @@ function draw(isAdmin){
     const amax=Object.entries(aym).sort((a,b)=>b[1]-a[1])[0];if(amax)ins.push('<div class="insight">En yoğun ay: <b>'+AYLAR[+amax[0]]+'</b> ('+amax[1]+')</div>');
     const wa=f.filter(r=>r.akis).length;ins.push('<div class="insight">Akış no\u0027lu görüşme: <b>'+wa+'</b></div>');}
   $('ins').innerHTML=ins.join('')||'<div class="empty">Kayıt yok</div>';
+  // Satış hunisi — durum dağılımı (DURUMLAR sırasıyla)
+  const dm={};f.forEach(r=>{const d=r.durum||'Görüşüldü';dm[d]=(dm[d]||0)+1});
+  const funnelEntries=DURUMLAR.filter(d=>dm[d]).map(d=>[d,dm[d]]);
+  const fmx=Math.max(1,...funnelEntries.map(e=>e[1]));
+  if($('funnel'))$('funnel').innerHTML=funnelEntries.length?funnelEntries.map(e=>{
+    const renk=DURUM_RENK[e[0]]||'#71717a';
+    return '<div class="bar"><span class="name">'+esc(e[0])+'</span><span class="track"><span class="fill" style="width:'+(e[1]/fmx*100)+'%;background:'+renk+'"></span></span><span class="num">'+e[1]+'</span></div>';
+  }).join(''):'<div class="empty">Veri yok</div>';
+  // Prim / dönüşüm
+  if($('primPanel')){
+    const baglanan=f.filter(r=>r.durum==='Poliçe Bağlandı');
+    const teklif=f.filter(r=>['Teklif Verildi','RT Yapıldı','Poliçe Bağlandı','Kaybedildi'].includes(r.durum)).length;
+    const kayip=f.filter(r=>r.durum==='Kaybedildi').length;
+    const toplamPrim=baglanan.reduce((s,r)=>s+(Number(r.prim)||0),0);
+    const donusum=teklif?Math.round(baglanan.length/teklif*100):0;
+    const pi=[];
+    pi.push('<div class="insight">Toplam bağlanan prim: <b>₺'+toplamPrim.toLocaleString('tr-TR')+'</b></div>');
+    pi.push('<div class="insight">Bağlanan poliçe: <b>'+baglanan.length+'</b> · Kaybedilen: <b>'+kayip+'</b></div>');
+    pi.push('<div class="insight">Teklif→Poliçe dönüşüm oranı: <b>%'+donusum+'</b></div>');
+    $('primPanel').innerHTML=pi.join('');
+  }
   $('rc').textContent=f.length;
   $('recs').innerHTML=f.length?f.slice().reverse().map(r=>{
     const benimKaydim=(r.uw_id===CUR.id);
     let tc='tag tur-yeni';if((r.tur||'').toLowerCase()==='yenileme')tc='tag tur-yen';
     const kioTag=r.kio_mu?'<span class="tag" style="background:#0a7d32;color:#fff">KİO ✓</span>':'<span class="tag" style="background:#fff;color:#a16207;border:1px solid #eab308">Liste dışı</span>';
+    const dRenk=DURUM_RENK[r.durum]||'#71717a';
+    const durumTag=r.durum?'<span class="tag" style="background:'+dRenk+';color:#fff">'+esc(r.durum)+'</span>':'';
+    const primTag=(r.prim!=null&&r.prim!=='')?'<span class="tag" style="background:#fff;color:#0a7d32;border:1px solid #0a7d32">₺'+Number(r.prim).toLocaleString('tr-TR')+'</span>':'';
     return '<div class="rec"><div class="top">'+
       (r.tarih?'<span class="tag tarih">'+r.tarih+'</span>':'')+
       kioTag+
+      durumTag+
+      primTag+
       (isAdmin&&r.uw_ad?'<span class="tag uw">'+esc(r.uw_ad)+'</span>':'')+
       (r.bolge?'<span class="tag bolge">'+esc(r.bolge)+'</span>':'')+
       (r.tur?'<span class="'+tc+'">'+esc(r.tur)+'</span>':'')+
@@ -292,6 +327,8 @@ function renderForm(){
         <div class="full"><label>Görüşülen Acente</label><input id="iAcente" value="${esc(e.acente||'')}" placeholder="Acente unvanı"></div>
         <div><label>Görüşülen Kişi</label><input id="iKisi" value="${esc(e.kisi||'')}" placeholder="Ad Soyad"></div>
         <div><label>Akış No</label><input id="iAkis" value="${esc(e.akis||'')}" placeholder="KTT...... (varsa)"></div>
+        <div><label>Durum / Aşama</label><select id="iDurum">${DURUMLAR.map(d=>'<option'+(((e.durum||'Görüşüldü')===d)?' selected':'')+'>'+d+'</option>').join('')}</select></div>
+        <div><label>Prim (₺, opsiyonel)</label><input id="iPrim" type="number" step="any" value="${e.prim!=null?e.prim:''}" placeholder="Poliçe bağlandıysa"></div>
         <div class="full"><label>Konu Başlığı</label>
           <select id="iKonuBas">${KONULAR.map(k=>'<option'+(((e.konu||'').split(' — ')[0]===k)?' selected':'')+'>'+k+'</option>').join('')}</select></div>
         <div class="full"><label>Konu Notu (opsiyonel)</label><textarea id="iKonuNot" placeholder="Detay / açıklama">${esc((e.konu||'').includes(' — ')?(e.konu||'').split(' — ').slice(1).join(' — '):((KONULAR.includes((e.konu||'').split(' — ')[0]))?'':(e.konu||'')))}</textarea></div>
@@ -306,11 +343,12 @@ async function saveForm(){
   const ac=$('iAcente').value.trim();if(!ac){alert('Acente alanı zorunlu.');return;}
   const kbas=$('iKonuBas').value;const knot=$('iKonuNot').value.trim();
   const konu=knot?(kbas+' — '+knot):kbas;
-  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:konu,sonuc:$('iSonuc').value.trim()};
+  const primVal=$('iPrim').value.trim();
+  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:konu,sonuc:$('iSonuc').value.trim(),durum:$('iDurum').value,prim:primVal===''?null:parseFloat(primVal)};
   $('saveBtn').disabled=true;
   try{
     if(EDIT){await api('update',{payload:p});EDIT=null;$('formMsg').textContent='✓ Güncellendi';}
-    else{await api('add',{payload:p});$('formMsg').textContent='✓ Kaydedildi';['iAcente','iKisi','iAkis','iKonuNot','iSonuc'].forEach(i=>$(i).value='');}
+    else{await api('add',{payload:p});$('formMsg').textContent='✓ Kaydedildi';['iAcente','iKisi','iAkis','iKonuNot','iSonuc','iPrim'].forEach(i=>$(i).value='');}
   }catch(e){alert(e.error||'Kaydedilemedi')}
   $('saveBtn').disabled=false;setTimeout(()=>{if($('formMsg'))$('formMsg').textContent=''},2500);
 }
@@ -439,7 +477,7 @@ function renderRapor(){
       <div class="insight">Toplam <b>${ROWS.length}</b> kayıt · <b>${uniq(ROWS.map(r=>r.uw_ad)).length}</b> UW</div>
     </div>`;
 }
-function expRows(){return ROWS.map(r=>({'UW':r.uw_ad,'TARİH':r.tarih,'BÖLGE':r.bolge,'GÖRÜŞÜLEN ACENTE':r.acente,'GÖRÜŞME YAPILAN KİŞİ':r.kisi,'AKIŞ NO':r.akis,'YENİ İŞ - YENİLEME':r.tur,'KONU':r.konu,'SONUÇ':r.sonuc}))}
+function expRows(){return ROWS.map(r=>({'UW':r.uw_ad,'TARİH':r.tarih,'BÖLGE':r.bolge,'GÖRÜŞÜLEN ACENTE':r.acente,'KİO':r.kio_mu?'Evet':'Hayır','GÖRÜŞME YAPILAN KİŞİ':r.kisi,'AKIŞ NO':r.akis,'YENİ İŞ - YENİLEME':r.tur,'DURUM':r.durum,'PRİM':r.prim!=null?r.prim:'','KONU':r.konu,'SONUÇ':r.sonuc}))}
 function exportXlsx(){const ws=XLSX.utils.json_to_sheet(expRows());const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'ARAMALAR');XLSX.writeFile(wb,'acente_aramalar_export.xlsx');}
 function exportCsv(){const ws=XLSX.utils.json_to_sheet(expRows());const csv=XLSX.utils.sheet_to_csv(ws);const b=new Blob(['\ufeff'+csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='acente_aramalar.csv';a.click();}
 function printRapor(){
