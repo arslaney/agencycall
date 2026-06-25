@@ -93,12 +93,24 @@
   table.cmp th{text-align:left;padding:8px 6px;border-bottom:2px solid var(--line)}
   table.cmp td{padding:9px 6px;border-bottom:1px solid var(--line)}
   footer{text-align:center;padding:18px;color:var(--muted);font-size:11px}
+  /* birleşik tasarım öğeleri */
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .chip{font-size:12px;font-weight:600;padding:7px 15px;border-radius:20px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--muted);transition:all .15s}
+  .chip:hover{border-color:var(--red)}
+  .chip.on{background:var(--red);color:#fff;border-color:var(--red)}
+  .ringWrap{display:flex;align-items:center;gap:18px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin-bottom:18px}
+  .ringWrap svg circle.prog{transition:stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)}
+  .kpi,.bar .fill,.rec{transition:transform .15s,box-shadow .15s,border-color .15s}
+  .kpi:hover{transform:translateY(-2px);box-shadow:0 3px 10px rgba(0,0,0,.07)}
+  .rec:hover{border-color:var(--red)}
+  .bar .fill{width:0;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+  .bar.anim .fill{width:var(--w)}
 </style>
 </head>
 <body>
 <div id="login">
   <div class="loginbox">
-    <div class="logo"><span class="dot"></span><h1>Acente Aramaları</h1></div>
+    <div class="logo" style="flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:10px"><img src="sompo-logo.png" alt="Sompo Sigorta" style="height:38px;width:auto"><h1 style="font-size:17px">Acente Aramaları</h1></div>
     <div class="sub">Sompo Sigorta · Görüşme Takip Sistemi</div>
     <label>Kullanıcı</label><select id="loginUser"><option>Yükleniyor...</option></select>
     <label>Şifre</label>
@@ -111,7 +123,7 @@
 
 <div id="app" class="hidden">
   <header>
-    <div class="brand"><span class="dot"></span><div><h1>ACENTE ARAMALARI</h1><div class="who" id="whoami"></div></div></div>
+    <div class="brand"><img src="sompo-logo.png" alt="Sompo" style="height:26px;width:auto;background:#fff;padding:3px 7px;border-radius:6px"><div style="border-left:1px solid #3f3f46;padding-left:11px"><h1>ACENTE ARAMALARI</h1><div class="who" id="whoami"></div></div></div>
     <div class="right"><span class="badge" id="roleBadge"></span><button class="logout" onclick="doLogout()">Çıkış</button></div>
   </header>
   <div class="wrap"><div class="tabs" id="tabs"></div><div id="view"></div></div>
@@ -196,7 +208,11 @@ async function showView(v){
 let FILT={};
 function renderDashboard(isAdmin){
   FILT={ay:'',bolge:'',uw:'',tur:'',acente:'',q:''};
+  const ownView=(!isAdmin && document.querySelector('.tab.on')?.dataset.v==='benim');
   $('view').innerHTML=`
+    ${ownView?'<div id="hedefSerit"></div>':''}
+    ${isAdmin?'<div class="ringWrap" id="ringWrap"></div>':''}
+    <div class="chips" id="chips"></div>
     <div class="kpis" id="kpis"></div>
     <div class="filters">
       <div class="f"><label>Ay</label><select id="fAy"></select></div>
@@ -234,6 +250,43 @@ function renderDashboard(isAdmin){
   ids.forEach(id=>{if($(id))$(id).addEventListener('input',()=>{read();draw(isAdmin)})});
   $('reset').onclick=()=>{ids.forEach(i=>{if($(i))$(i).value=''});read();draw(isAdmin)};
   draw(isAdmin);
+  if(ownView)loadHedefSerit();
+  // hızlı filtre çipleri
+  const cw=$('chips');
+  if(cw){
+    const cdefs=[['','Tümü'],['ay-bu','Bu ay'],['kio-1','KİO'],['kio-0','Liste dışı'],['durum-Poliçe Bağlandı','Poliçe bağlandı'],['durum-Teklif Verildi','Teklif']];
+    cw.innerHTML=cdefs.map((c,i)=>'<button class="chip'+(i===0?' on':'')+'" data-c="'+c[0]+'">'+c[1]+'</button>').join('');
+    cw.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{
+      cw.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));ch.classList.add('on');
+      const c=ch.dataset.c;
+      ['fAy','fKio','fDurum'].forEach(i=>{if($(i))$(i).value='';});
+      if(c.startsWith('ay-bu')){const m=new Date().getMonth()+1;if($('fAy'))$('fAy').value=m;}
+      else if(c.startsWith('kio-')){if($('fKio'))$('fKio').value=c.split('-')[1];}
+      else if(c.startsWith('durum-')){if($('fDurum'))$('fDurum').value=c.slice(6);}
+      read();draw(isAdmin);
+    }));
+  }
+}
+async function loadHedefSerit(){
+  const el=$('hedefSerit');if(!el)return;
+  try{
+    const now=new Date();
+    const r=await api('hedef_benim',{payload:{yil:now.getFullYear(),ay:now.getMonth()+1}});
+    const yuzde=r.hedef?Math.round(r.gerceklesen/r.hedef*100):0;
+    const renk=yuzde>=100?'#0a7d32':(yuzde>=60?'#eab308':'#C8102E');
+    const kalan=Math.max(0,r.hedef-r.gerceklesen);
+    if(!r.hedef){
+      el.innerHTML='<div class="insight" style="margin-bottom:14px">Bu ay için henüz arama hedefi belirlenmemiş.</div>';
+      return;
+    }
+    el.innerHTML=`<div class="panel" style="margin-bottom:16px"><div class="body" style="padding:14px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700">${AYLAR[r.ay]} ${r.yil} Arama Hedefim</div>
+        <div style="font-size:13px"><b style="color:${renk}">${r.gerceklesen}</b> / ${r.hedef} ${kalan>0?'· '+kalan+' kaldı':'· ✓ tamamlandı'}</div>
+      </div>
+      <div style="background:var(--soft);border-radius:6px;height:22px;overflow:hidden"><div style="height:100%;width:${Math.min(100,yuzde)}%;background:${renk};display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-size:11px;font-weight:700">${yuzde}%</div></div>
+    </div></div>`;
+  }catch(e){el.innerHTML='';}
 }
 function applyF(){return ROWS.filter(r=>{
   if(FILT.ay&&r.ay!==parseInt(FILT.ay,10))return false;
@@ -246,7 +299,7 @@ function applyF(){return ROWS.filter(r=>{
   if(FILT.durum&&r.durum!==FILT.durum)return false;
   if(FILT.q){const b=((r.konu||'')+' '+(r.sonuc||'')+' '+(r.acente||'')+' '+(r.kisi||'')+' '+(r.akis||'')).toLowerCase();if(!b.includes(FILT.q))return false;}
   return true;})}
-function barHTML(entries,lf){if(!entries.length)return '<div class="empty">Veri yok</div>';const mx=Math.max(1,...entries.map(e=>e[1]));return entries.map(e=>'<div class="bar"><span class="name" title="'+esc(lf(e[0]))+'">'+esc(lf(e[0]))+'</span><span class="track"><span class="fill" style="width:'+(e[1]/mx*100)+'%"></span></span><span class="num">'+e[1]+'</span></div>').join('')}
+function barHTML(entries,lf){if(!entries.length)return '<div class="empty">Veri yok</div>';const mx=Math.max(1,...entries.map(e=>e[1]));const html=entries.map(e=>'<div class="bar" style="--w:'+(e[1]/mx*100)+'%"><span class="name" title="'+esc(lf(e[0]))+'">'+esc(lf(e[0]))+'</span><span class="track"><span class="fill"></span></span><span class="num">'+e[1]+'</span></div>').join('');setTimeout(()=>document.querySelectorAll('.bar:not(.anim)').forEach(b=>b.classList.add('anim')),50);return html;}
 function draw(isAdmin){
   const f=applyF();
   const yeni=f.filter(r=>(r.tur||'').toLowerCase().includes('yeni iş')).length;
@@ -255,6 +308,22 @@ function draw(isAdmin){
   const kpis=[[f.length,'Görüşme'],[uniq(f.map(r=>r.acente)).length,'Aktif Acente'],[kioG,'KİO Görüşme'],[f.length-kioG,'Liste Dışı'],[yeni,'Yeni İş']];
   if(isAdmin)kpis.push([uniq(f.map(r=>r.uw_ad)).length,'UW']);
   $('kpis').innerHTML=kpis.map(k=>'<div class="kpi"><div class="v">'+k[0]+'</div><div class="l">'+k[1]+'</div></div>').join('');
+  // KİO kapsama halkası (filtreli görüşmelerde KİO oranı)
+  const rw=$('ringWrap');
+  if(rw){
+    const oran=f.length?Math.round(kioG/f.length*100):0;
+    const cevre=2*Math.PI*42;
+    rw.innerHTML='<svg width="100" height="100" viewBox="0 0 100 100" style="transform:rotate(-90deg)">'+
+      '<circle cx="50" cy="50" r="42" fill="none" stroke="var(--soft)" stroke-width="9"/>'+
+      '<circle class="prog" cx="50" cy="50" r="42" fill="none" stroke="var(--red)" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+cevre+'" stroke-dashoffset="'+cevre+'"/></svg>'+
+      '<div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--dark)">KİO Kapsama Oranı</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-top:3px">'+kioG+' / '+f.length+' görüşme KİO listesindeki acentelerle</div>'+
+      '<div style="font-size:28px;font-weight:800;color:var(--red);margin-top:6px" id="ringNum">%0</div></div>';
+    setTimeout(()=>{
+      const c=rw.querySelector('.prog');if(c)c.style.strokeDashoffset=cevre-(cevre*oran/100);
+      let cur=0;const t=setInterval(()=>{cur+=Math.max(1,Math.round(oran/25));if(cur>=oran){cur=oran;clearInterval(t);}const rn=$('ringNum');if(rn)rn.textContent='%'+cur;},25);
+    },100);
+  }
   const aym={};f.forEach(r=>{if(r.ay>0)aym[r.ay]=(aym[r.ay]||0)+1});
   $('ayBar').innerHTML=barHTML(Object.entries(aym).map(([k,v])=>[+k,v]).sort((a,b)=>a[0]-b[0]),k=>AYLAR[k]);
   const ac={};f.forEach(r=>{if(r.acente)ac[r.acente]=(ac[r.acente]||0)+1});
