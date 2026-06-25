@@ -73,6 +73,7 @@ module.exports = async (req, res) => {
         tarih: r.tarih, ay: r.ay, yil: r.yil, bolge: r.bolge,
         acente: r.acente, kisi: r.kisi, akis: r.akis_no, tur: r.tur,
         konu: r.konu, sonuc: r.sonuc,
+        durum: r.durum || 'Görüşüldü', prim: r.prim,
         kio_mu: r.kio_mu === true, kio_kod: r.kio_kod, kio_ad: r.kio_ad, kio_brans: r.kio_brans
       }));
       return res.json({ rows: mapped, isAdmin });
@@ -125,7 +126,8 @@ module.exports = async (req, res) => {
         uw_id, // her zaman giriş yapan UW adına
         tarih: p.tarih || null, bolge: p.bolge || null, acente: p.acente,
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
-        konu: p.konu || null, sonuc: p.sonuc || null
+        konu: p.konu || null, sonuc: p.sonuc || null,
+        durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null
       };
       const out = await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(rec) });
       return res.json({ ok: true, row: out[0] });
@@ -143,7 +145,8 @@ module.exports = async (req, res) => {
       const upd = {
         tarih: p.tarih || null, bolge: p.bolge || null, acente: p.acente,
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
-        konu: p.konu || null, sonuc: p.sonuc || null
+        konu: p.konu || null, sonuc: p.sonuc || null,
+        durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null
       };
       const out = await sb(`acente_gorusmeler?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(upd) });
       return res.json({ ok: true, row: out[0] });
