@@ -515,15 +515,28 @@ async function renderKioTakip(){
   const kio=data.kio||[], dis=data.dis||[];
   const arandi=kio.filter(k=>k.arandi), aranmadi=kio.filter(k=>!k.arandi);
   const oran=kio.length?Math.round(arandi.length/kio.length*100):0;
+  // bu ay
+  const arandiAy=kio.filter(k=>k.arandi_ay), aranmadiAy=kio.filter(k=>!k.arandi_ay);
+  const oranAy=kio.length?Math.round(arandiAy.length/kio.length*100):0;
+  const ayAdi=AYLAR[data.buAy]||'';
   // bölge dağılımı (aranmayanlar)
   const bolgeAranmadi={};aranmadi.forEach(k=>{const b=k.sompo_bolge||'?';bolgeAranmadi[b]=(bolgeAranmadi[b]||0)+1});
   $('view').innerHTML=`
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px 2px">📅 Yıl Başından Bugüne (${data.buYil})</div>
     <div class="kpis">
       <div class="kpi"><div class="v">${kio.length}</div><div class="l">Toplam KİO Acente</div></div>
       <div class="kpi"><div class="v" style="color:var(--green)">${arandi.length}</div><div class="l">Arandı</div></div>
       <div class="kpi"><div class="v" style="color:#a16207">${aranmadi.length}</div><div class="l">Henüz Aranmadı</div></div>
       <div class="kpi"><div class="v">%${oran}</div><div class="l">Kapsama</div></div>
       <div class="kpi"><div class="v" style="color:var(--red)">${dis.length}</div><div class="l">Liste Dışı Aranan</div></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px 2px">🗓️ Bu Ay (${ayAdi} ${data.buYil})</div>
+    <div class="kpis">
+      <div class="kpi"><div class="v">${kio.length}</div><div class="l">Toplam KİO Acente</div></div>
+      <div class="kpi"><div class="v" style="color:var(--green)">${arandiAy.length}</div><div class="l">Bu Ay Arandı</div></div>
+      <div class="kpi"><div class="v" style="color:#a16207">${aranmadiAy.length}</div><div class="l">Bu Ay Aranmadı</div></div>
+      <div class="kpi"><div class="v">%${oranAy}</div><div class="l">Aylık Kapsama</div></div>
+      <div class="kpi"><div class="v" style="color:var(--red)">${data.disAyAdet||0}</div><div class="l">Bu Ay Liste Dışı</div></div>
     </div>
     <div class="filters" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
       <div class="f"><label>Durum</label><select id="kDurum"><option value="">Tümü</option><option value="1">✓ Arananlar</option><option value="0">⬜ Aranmayanlar</option></select></div>
@@ -558,8 +571,9 @@ async function renderKioTakip(){
     $('kCount').textContent=l.length+' acente';
     $('kList').innerHTML=l.length?l.map(k=>{
       const dot=k.arandi?'<span style="color:var(--green);font-weight:700">✓</span>':'<span style="color:#a16207;font-weight:700">○</span>';
+      const ayRozet=k.arandi_ay?'<span class="tag" style="background:#0a7d32;color:#fff;font-size:10px;padding:1px 6px">bu ay '+k.gorusme_sayisi_ay+'</span>':(k.arandi?'<span class="tag" style="background:#fff;color:#a16207;border:1px solid #eab308;font-size:10px;padding:1px 6px">bu ay yok</span>':'');
       const info=k.arandi?(k.gorusme_sayisi+' görüşme · son '+k.son_gorusme):'henüz aranmadı';
-      return '<div class="rec" style="padding:10px 16px;display:flex;align-items:center;gap:10px"><div style="font-size:16px">'+dot+'</div><div style="flex:1"><div class="acente" style="font-size:13px">'+esc(k.ad)+'</div><div class="kisi">'+esc(k.il||'')+' · '+esc(k.sompo_bolge||'')+' · '+esc(k.hangi_brans||'')+'</div></div><div style="font-size:11px;color:var(--muted);text-align:right;min-width:90px">'+info+'</div></div>';
+      return '<div class="rec" style="padding:10px 16px;display:flex;align-items:center;gap:10px"><div style="font-size:16px">'+dot+'</div><div style="flex:1"><div class="acente" style="font-size:13px">'+esc(k.ad)+' '+ayRozet+'</div><div class="kisi">'+esc(k.il||'')+' · '+esc(k.sompo_bolge||'')+' · '+esc(k.hangi_brans||'')+'</div></div><div style="font-size:11px;color:var(--muted);text-align:right;min-width:90px">'+info+'</div></div>';
     }).join(''):'<div class="empty">Eşleşen yok</div>';
   };
   ['kDurum','kBolge','kIl','kSearch'].forEach(id=>$(id).addEventListener('input',drawList));
