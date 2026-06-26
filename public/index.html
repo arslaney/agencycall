@@ -12,7 +12,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Acente Arama">
 <meta name="theme-color" content="#C8102E">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
   :root{--red:#C8102E;--dark:#1A1A1A;--bg:#f4f4f5;--card:#fff;--line:#e4e4e7;--muted:#71717a;--soft:#fafafa;--green:#0a7d32}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -735,30 +734,54 @@ function trNorm(s){return (s||'').toString().toLocaleUpperCase('tr-TR')
   .replace(/[^A-Z]/g,'');}
 function cizTurkiyeHarita(ilStat){
   const wrap=document.getElementById('trmap');
-  if(!wrap||typeof d3==='undefined')return;
+  if(!wrap)return;
   const DATA={};Object.keys(ilStat).forEach(k=>{DATA[trNorm(k)]=ilStat[k];});
   const renk=(s)=>{if(!s||!s.top)return '#e5e7eb';const o=s.ar/s.top;if(o===0)return '#C8102E';if(o>=1)return '#0a7d32';return o<0.5?'#e8821e':'#9a9b1e';};
-  // önbellek: harita verisini bir kez indir
+  const W=680,H=320;
+  // basit mercator projeksiyonu (Türkiye için kalibre)
+  const LON0=26,LON1=45,LAT0=35.8,LAT1=42.3;
+  function merY(lat){return Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));}
+  const my0=merY(LAT0),my1=merY(LAT1);
+  function proj(lon,lat){
+    const x=(lon-LON0)/(LON1-LON0)*W;
+    const y=H-((merY(lat)-my0)/(my1-my0))*H;
+    return [x,y];
+  }
+  function ringToPath(ring){
+    let d='';
+    for(let i=0;i<ring.length;i++){const[x,y]=proj(ring[i][0],ring[i][1]);d+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);}
+    return d+'Z';
+  }
+  function featPath(geo){
+    let d='';const g=geo.geometry;if(!g)return d;
+    const polys=g.type==='MultiPolygon'?g.coordinates:[g.coordinates];
+    polys.forEach(poly=>poly.forEach(ring=>{d+=ringToPath(ring);}));
+    return d;
+  }
   const draw=(geo)=>{
-    const w=680,h=300;
-    const proj=d3.geoMercator().center([35,39]).scale(2300).translate([w/2,h/2]);
-    const path=d3.geoPath().projection(proj);
-    wrap.innerHTML='';
-    const svg=d3.select('#trmap').append('svg').attr('viewBox','0 0 '+w+' '+h).attr('width','100%').style('background','#eef3f8').style('border-radius','12px').style('border','1px solid var(--line)');
     const tip=document.getElementById('trtip');
-    svg.selectAll('path').data(geo.features).join('path')
-      .attr('d',path).attr('stroke','#fff').attr('stroke-width',0.6)
-      .attr('fill',d=>{const p=d.properties||{};const dd=DATA[trNorm(p.name||p.Name||p.NAME_1||p.il||'')];return renk(dd);})
-      .style('cursor','pointer')
-      .on('mousemove',function(ev,d){const p=d.properties||{};const ad=(p.name||p.Name||p.NAME_1||p.il||'');const dd=DATA[trNorm(ad)];if(tip){tip.style.display='block';tip.style.left=(ev.clientX+12)+'px';tip.style.top=(ev.clientY+12)+'px';tip.innerHTML=ad+(dd?(': '+dd.ar+'/'+dd.top+' arandı (%'+Math.round(dd.ar/dd.top*100)+')'):': KİO yok');}d3.select(this).attr('stroke-width',1.5).attr('stroke','#1a1a1a');})
-      .on('mouseleave',function(){if(tip)tip.style.display='none';d3.select(this).attr('stroke-width',0.6).attr('stroke','#fff');})
-      .on('click',function(ev,d){const p=d.properties||{};const ad=(p.name||p.Name||p.NAME_1||p.il||'');const dd=DATA[trNorm(ad)];if(dd){if($('kIl'))$('kIl').value=findIlValue(ad);if(window._drawListKio)window._drawListKio();$('kList')&&$('kList').scrollIntoView({behavior:'smooth',block:'center'});}});
+    let paths='';
+    geo.features.forEach((ft,idx)=>{
+      const ad=(ft.properties&&ft.properties.name)||'';
+      const dd=DATA[trNorm(ad)];
+      const d=featPath(ft);
+      paths+='<path d="'+d+'" data-ad="'+esc(ad)+'" fill="'+renk(dd)+'" stroke="#fff" stroke-width="0.6" style="cursor:pointer"></path>';
+    });
+    wrap.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="background:#eef3f8;border-radius:12px;border:1px solid var(--line)">'+paths+'</svg>';
+    const svg=wrap.querySelector('svg');
+    svg.querySelectorAll('path').forEach(p=>{
+      const ad=p.dataset.ad;const dd=DATA[trNorm(ad)];
+      p.addEventListener('mousemove',(ev)=>{if(tip){tip.style.display='block';tip.style.left=(ev.clientX+12)+'px';tip.style.top=(ev.clientY+12)+'px';tip.innerHTML=ad+(dd?(': '+dd.ar+'/'+dd.top+' arandı (%'+Math.round(dd.ar/dd.top*100)+')'):': KİO yok');}p.setAttribute('stroke','#1a1a1a');p.setAttribute('stroke-width','1.5');});
+      p.addEventListener('mouseleave',()=>{if(tip)tip.style.display='none';p.setAttribute('stroke','#fff');p.setAttribute('stroke-width','0.6');});
+      p.addEventListener('click',()=>{if(dd){if($('kIl'))$('kIl').value=findIlValue(ad);if(window._drawListKio)window._drawListKio();$('kList')&&$('kList').scrollIntoView({behavior:'smooth',block:'center'});}});
+    });
   };
   if(window._TRGEO){draw(window._TRGEO);return;}
   wrap.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted)">Harita yükleniyor…</div>';
-  d3.json('https://cdn.jsdelivr.net/gh/alpers/Turkey-Maps-GeoJSON@master/tr-cities-utf8.json')
+  // kendi sunucumuzdan (güvenlik duvarı engellemez)
+  fetch('/tr-iller.json').then(r=>r.json())
     .then(geo=>{window._TRGEO=geo;draw(geo);})
-    .catch(e=>{wrap.innerHTML='<div style="padding:30px;text-align:center;color:var(--muted)">Harita yüklenemedi. İnternet bağlantısını kontrol edin.</div>';});
+    .catch(e=>{wrap.innerHTML='<div style="padding:30px;text-align:center;color:var(--muted)">Harita verisi yüklenemedi.</div>';});
 }
 function findIlValue(ad){
   // kIl select'inde eşleşen değeri bul (Türkçe il adı)
