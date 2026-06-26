@@ -345,15 +345,48 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         const chk = await sb(`acente_uw?id=eq.${encodeURIComponent(pl.hedef_uw)}&select=id`);
         if (chk[0]) hedefUw = pl.hedef_uw;
       }
-      const recs = items.filter(p => p.acente).map(p => ({
+      let recs = items.filter(p => p.acente).map(p => ({
         uw_id: hedefUw,
         tarih: p.tarih || null, bolge: p.bolge || null, acente: p.acente,
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
         konu: p.konu || null, sonuc: p.sonuc || null
       }));
-      if (!recs.length) return res.json({ ok: true, added: 0 });
-      await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(recs), prefer: 'return=minimal' });
-      return res.json({ ok: true, added: recs.length, hedef: hedefUw });
+      const gelen = recs.length;
+      if (!recs.length) return res.json({ ok: true, added: 0, atlanan: 0, gelen: 0 });
+
+      // 1) Excel'in KENDİ İÇİNDEKİ tekrarları ele (aynı parmak izi birden çok satırda)
+      const gorulen = new Set();
+      recs = recs.filter(r => {
+        const fp = [r.uw_id, r.tarih || '', r.acente || '', r.kisi || '', r.konu || ''].join('||').toLocaleLowerCase('tr-TR');
+        if (gorulen.has(fp)) return false;
+        gorulen.add(fp);
+        return true;
+      });
+
+      // 2) Veritabanında ZATEN OLAN kayıtları atla (unique index + ignore-duplicates)
+      // PostgREST: çakışanları sessizce yok say, sadece yeni eklenenleri döndür
+      let eklenen = [];
+      try {
+        eklenen = await sb('acente_gorusmeler', {
+          method: 'POST',
+          body: JSON.stringify(recs),
+          prefer: 'return=representation,resolution=ignore-duplicates',
+          headers: { Prefer: 'return=representation,resolution=ignore-duplicates' }
+        });
+      } catch (e) {
+        // beklenmedik hata: parça parça dene (tek tek, çakışanı atla)
+        eklenen = [];
+        for (const r of recs) {
+          try {
+            const o = await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(r), prefer: 'return=representation,resolution=ignore-duplicates', headers: { Prefer: 'return=representation,resolution=ignore-duplicates' } });
+            if (o && o[0]) eklenen.push(o[0]);
+          } catch (e2) { /* çakışma, atla */ }
+        }
+      }
+      const added = Array.isArray(eklenen) ? eklenen.length : 0;
+      const atlanan = gelen - added;
+      await logKaydet(uw_id, meAd, 'bulk', `${added} eklendi, ${atlanan} atlandı (mükerrer)`, null);
+      return res.json({ ok: true, added, atlanan, gelen, hedef: hedefUw });
     }
 
     // === TAKİP HATIRLATMALARI ===
@@ -497,6 +530,85 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         son_tarih: g.son_tarih, uwlar: [...g.uwlar], notlar: g.notlar, ornek_id: g.ornek_id
       })).sort((a, b) => (b.son_tarih || '').localeCompare(a.son_tarih || ''));
       return res.json({ havuz });
+    }
+
+    // === UW KİŞİSEL PANELİ ===
+    // UW'nin kendi istatistikleri + kendi bölgelerindeki KİO durumu + ekip liderlik sırası
+    if (action === 'uw_panel') {
+      const yil = (payload && payload.yil) || new Date().getFullYear();
+      const ay = (payload && payload.ay) || (new Date().getMonth() + 1);
+
+      // 1) Kendi görüşmelerim (tüm yıl)
+      const benim = await sb(`acente_gorusmeler_kio?select=bolge,acente,kio_kod,kio_mu,durum,prim,ay,yil&uw_id=eq.${encodeURIComponent(uw_id)}&yil=eq.${yil}`);
+      const benimAy = benim.filter(r => r.ay === ay);
+      const istat = (rows) => {
+        const kioKod = new Set(), acenteler = new Set();
+        let kioG = 0, teklif = 0, police = 0, prim = 0;
+        rows.forEach(r => {
+          acenteler.add((r.acente || '').toLocaleUpperCase('tr-TR').trim());
+          if (r.kio_mu) { kioG++; kioKod.add(r.kio_kod); }
+          if (['Teklif Verildi', 'RT Yapıldı', 'Poliçe Bağlandı', 'Kaybedildi'].includes(r.durum)) teklif++;
+          if (r.durum === 'Poliçe Bağlandı') { police++; prim += Number(r.prim) || 0; }
+        });
+        return {
+          gorusme: rows.length, kio_gorusme: kioG, kio_acente: kioKod.size,
+          ayri_acente: acenteler.size, teklif, police, prim,
+          donusum: teklif ? Math.round(police / teklif * 100) : 0,
+          ort: acenteler.size ? Math.round(rows.length / acenteler.size * 10) / 10 : 0
+        };
+      };
+      const yilStat = istat(benim);
+      const ayStat = istat(benimAy);
+
+      // 2) Kendi çalıştığım bölgelerdeki KİO durumu
+      const benimBolgeler = [...new Set(benim.map(r => r.bolge).filter(Boolean))];
+      // bu yıl benim aradığım KİO kodları
+      const benimKioKod = new Set(benim.filter(r => r.kio_mu).map(r => r.kio_kod));
+      // bu bölgelerdeki tüm KİO'lar
+      let bolgeKio = [];
+      if (benimBolgeler.length) {
+        const inList = benimBolgeler.map(b => `"${b}"`).join(',');
+        bolgeKio = await sb(`acente_kio?select=kod,ad,il,sompo_bolge&sompo_bolge=in.(${inList})&order=ad.asc`);
+      }
+      // ekip geneli bu yıl aranan KİO kodları (benim bölgemdeki bir KİO başkası aramışsa da "arandı" say)
+      const ekipArananRows = await sb(`acente_gorusmeler_kio?select=kio_kod&kio_mu=eq.true&yil=eq.${yil}`);
+      const ekipArananKod = new Set(ekipArananRows.map(r => r.kio_kod));
+      const bolgeKioDurum = bolgeKio.map(k => ({
+        kod: k.kod, ad: k.ad, il: k.il, bolge: k.sompo_bolge,
+        ben_aradim: benimKioKod.has(k.kod),
+        ekip_aradi: ekipArananKod.has(k.kod)
+      }));
+
+      // 3) Ekip liderlik tablosu (mahremiyet: prim YOK, sadece aktivite + dönüşüm)
+      const tumRows = await sb(`acente_gorusmeler_kio?select=uw_id,kio_mu,durum&yil=eq.${yil}`);
+      const us = await sb('acente_uw?select=id,ad,rol,aktif');
+      const adMap = {}, aktifMap = {}; us.forEach(u => { adMap[u.id] = u.ad; aktifMap[u.id] = u.aktif; });
+      const uwStat = {};
+      tumRows.forEach(r => {
+        if (aktifMap[r.uw_id] === false) return;
+        if (!uwStat[r.uw_id]) uwStat[r.uw_id] = { gorusme: 0, kio: 0, teklif: 0, police: 0 };
+        uwStat[r.uw_id].gorusme++;
+        if (r.kio_mu) uwStat[r.uw_id].kio++;
+        if (['Teklif Verildi', 'RT Yapıldı', 'Poliçe Bağlandı', 'Kaybedildi'].includes(r.durum)) uwStat[r.uw_id].teklif++;
+        if (r.durum === 'Poliçe Bağlandı') uwStat[r.uw_id].police++;
+      });
+      const liderlik = Object.entries(uwStat).map(([id, s]) => ({
+        uw_id: id, ad: adMap[id] || id, gorusme: s.gorusme, kio: s.kio,
+        donusum: s.teklif ? Math.round(s.police / s.teklif * 100) : 0,
+        ben: id === uw_id
+      })).sort((a, b) => b.gorusme - a.gorusme);
+      const benimSira = liderlik.findIndex(x => x.ben) + 1;
+
+      // 4) Hedef
+      const h = await sb(`acente_hedef?select=hedef&uw_id=eq.${encodeURIComponent(uw_id)}&yil=eq.${yil}&ay=eq.${ay}`);
+      const hedef = (h[0] && h[0].hedef) || 0;
+
+      return res.json({
+        yil, ay, yilStat, ayStat,
+        bolgelerim: benimBolgeler, bolgeKioDurum,
+        liderlik, benimSira, toplamUw: liderlik.length,
+        hedef, hedefGerceklesen: ayStat.gorusme
+      });
     }
 
     return res.status(400).json({ error: 'Bilinmeyen aksiyon' });
