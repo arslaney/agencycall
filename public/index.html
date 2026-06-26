@@ -193,8 +193,8 @@ async function enterApp(){
 }
 function buildTabs(){
   let tabs;
-  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['eslestir','🔗 KİO Eşleştir'],['trend','📈 Trend & Liderlik'],['hedef','🏆 Hedefler'],['takip','🔔 Takip'],['kayitlar','📜 Kayıtlar'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
-  else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['takip','🔔 Takip'],['yukle','📁 Excel Yükle']];
+  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['eslestir','🔗 KİO Eşleştir'],['trend','📈 Trend & Liderlik'],['hedef','🏆 Hedefler'],['kayitlar','📜 Kayıtlar'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
+  else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
   $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
   qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
   showView(tabs[0][0]);
@@ -208,7 +208,6 @@ async function showView(v){
     else if(v==='kio'){await renderKioTakip();}
     else if(v==='eslestir'){await renderEslestir();}
     else if(v==='trend'){await renderTrend();}
-    else if(v==='takip'){await renderTakip();}
     else if(v==='kayitlar'){await renderKayitlar();}
     else if(v==='hedef'){await renderHedef();}
     else if(v==='uwkarsi'){await loadRows();renderUwCompare();}
@@ -330,8 +329,8 @@ function draw(isAdmin){
     rw.innerHTML='<svg width="100" height="100" viewBox="0 0 100 100" style="transform:rotate(-90deg)">'+
       '<circle cx="50" cy="50" r="42" fill="none" stroke="var(--soft)" stroke-width="9"/>'+
       '<circle class="prog" cx="50" cy="50" r="42" fill="none" stroke="var(--red)" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+cevre+'" stroke-dashoffset="'+cevre+'"/></svg>'+
-      '<div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--dark)">KİO Kapsama Oranı</div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-top:3px">'+kioG+' / '+f.length+' görüşme KİO listesindeki acentelerle ('+kioAcente+' ayrı acente)</div>'+
+      '<div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--dark)">KİO Odak Oranı</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-top:3px">'+kioG+' / '+f.length+' görüşme KİO acentelerine yapıldı · '+kioAcente+' ayrı acente · acente başına '+(kioAcente?Math.round(kioG/kioAcente*10)/10:0)+' görüşme</div>'+
       '<div style="font-size:28px;font-weight:800;color:var(--red);margin-top:6px" id="ringNum">%0</div></div>';
     setTimeout(()=>{
       const c=rw.querySelector('.prog');if(c)c.style.strokeDashoffset=cevre-(cevre*oran/100);
@@ -565,6 +564,10 @@ async function renderKioTakip(){
       <div class="kpi"><div class="v" style="color:var(--red)">${data.disAyAdet||0}</div><div class="l">Bu Ay Liste Dışı</div></div>
     </div>
     <div id="kUyari"></div>
+    <div class="panel" style="margin-bottom:14px"><h2>📊 Acente Başına Görüşme Yoğunluğu</h2>
+      <div style="padding:6px 16px 4px;font-size:12px;color:var(--muted)">Her segmentte kaç ayrı acenteyle, kaç görüşme yapıldı ve acente başına ortalama kaç temas düştü. Yüksek ortalama = derin ilişki, düşük ortalama = yüzeysel/yeni temas.</div>
+      <div class="body" style="padding:8px 0" id="segmentTablo"></div>
+    </div>
     <div class="filters" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
       <div class="f"><label>Durum</label><select id="kDurum"><option value="">Tümü</option><option value="1">✓ Arananlar</option><option value="0">⬜ Aranmayanlar</option></select></div>
       <div class="f"><label>Sompo Bölge</label><select id="kBolge"></select></div>
@@ -596,6 +599,32 @@ async function renderKioTakip(){
       <div id="adayHavuz"></div>
     </div>`;
   window._KIO=kio;window._DIS=dis;
+  // 📊 SEGMENT TABLOSU — KİO / Aday KİO / Diğer × yıllık + aylık
+  const sY=data.segmentYil||{kio:{},aday:{},diger:{}}, sA=data.segmentAy||{kio:{},aday:{},diger:{}};
+  const segTbl=$('segmentTablo');
+  if(segTbl){
+    const satir=(ad,renk,y,a)=>`<tr>
+      <td style="padding-left:16px;font-weight:700"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${renk};margin-right:7px"></span>${ad}</td>
+      <td style="text-align:center">${y.ayri||0}</td>
+      <td style="text-align:center">${y.gorusme||0}</td>
+      <td style="text-align:center;font-weight:800;color:${renk}">${y.ort||0}</td>
+      <td style="text-align:center;border-left:1px solid var(--line)">${a.ayri||0}</td>
+      <td style="text-align:center">${a.gorusme||0}</td>
+      <td style="text-align:center;font-weight:800;color:${renk};padding-right:16px">${a.ort||0}</td>
+    </tr>`;
+    segTbl.innerHTML=`<table class="cmp" style="width:100%">
+      <thead>
+        <tr><th rowspan="2" style="padding-left:16px;vertical-align:bottom">Segment</th><th colspan="3" style="text-align:center;border-bottom:1px solid var(--line)">📅 Yıllık (${data.buYil})</th><th colspan="3" style="text-align:center;border-bottom:1px solid var(--line);border-left:1px solid var(--line)">🗓️ Bu Ay (${ayAdi})</th></tr>
+        <tr style="font-size:11px;color:var(--muted)"><th style="text-align:center">Acente</th><th style="text-align:center">Görüşme</th><th style="text-align:center">Ort.</th><th style="text-align:center;border-left:1px solid var(--line)">Acente</th><th style="text-align:center">Görüşme</th><th style="text-align:center;padding-right:16px">Ort.</th></tr>
+      </thead>
+      <tbody>
+        ${satir('🎯 KİO','#0a7d32',sY.kio,sA.kio)}
+        ${satir('⭐ Aday KİO','#a16207',sY.aday,sA.aday)}
+        ${satir('○ Diğer Acente','#71717a',sY.diger,sA.diger)}
+      </tbody>
+    </table>
+    <div style="padding:10px 16px 4px;font-size:12px;color:var(--muted)">💡 <b>Acente</b> = kaç ayrı acenteyle görüşüldü · <b>Görüşme</b> = toplam temas · <b>Ort.</b> = acente başına ortalama görüşme</div>`;
+  }
   // ⚠️ UYARI BANDI — hiç aranmayan bölgeler ve kritik KİO'lar
   const bolgeStat={};
   kio.forEach(k=>{const b=k.sompo_bolge||'?';if(!bolgeStat[b])bolgeStat[b]={top:0,ar:0};bolgeStat[b].top++;if(k.arandi)bolgeStat[b].ar++;});
