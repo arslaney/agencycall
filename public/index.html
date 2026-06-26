@@ -193,7 +193,7 @@ async function enterApp(){
 function buildTabs(){
   let tabs;
   if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['eslestir','🔗 KİO Eşleştir'],['trend','📈 Trend & Liderlik'],['hedef','🏆 Hedefler'],['kayitlar','📜 Kayıtlar'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
-  else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
+  else tabs=[['benim','📋 Görüşmelerim'],['panelim','📊 Panelim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
   $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
   qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
   showView(tabs[0][0]);
@@ -205,6 +205,7 @@ async function showView(v){
     if(v==='benim'){await loadRows(true);renderDashboard(false);}
     else if(v==='ozet'){await loadRows(false);renderDashboard(true);}
     else if(v==='kio'){await renderKioTakip();}
+    else if(v==='panelim'){await renderPanelim();}
     else if(v==='eslestir'){await renderEslestir();}
     else if(v==='trend'){await renderTrend();}
     else if(v==='kayitlar'){await renderKayitlar();}
@@ -507,7 +508,12 @@ function handleUpload(e){
     try{const pl={items};if(hedefUw)pl.hedef_uw=hedefUw;
       const r=await api('bulk',{payload:pl});
       const adi=(USERS.find(u=>u.id===(r.hedef||hedefUw))||{}).ad||'';
-      $('upResult').innerHTML='<div class="insight"><b>'+r.added+'</b> görüşme eklendi'+(adi?' ('+esc(adi)+' adına)':'')+'.</div>';}
+      const atlanan=r.atlanan||0;
+      let msg='<div class="insight"><b>'+r.added+'</b> görüşme eklendi'+(adi?' ('+esc(adi)+' adına)':'')+'.';
+      if(atlanan>0)msg+=' <span style="color:#a16207"><b>'+atlanan+'</b> kayıt zaten vardı, mükerrer olarak atlandı.</span>';
+      msg+='</div>';
+      if(atlanan>0)msg+='<div style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Aynı UW, tarih, acente, kişi ve konuya sahip kayıtlar mükerrer sayılıp atlanır. Aynı Excel\'i tekrar yüklesen bile veriler ikiye katlanmaz.</div>';
+      $('upResult').innerHTML=msg;}
     catch(er){$('upResult').innerHTML='<div class="empty">Hata: '+(er.error||'yükleme')+'</div>';}
   };
   rd.readAsArrayBuffer(file);
@@ -530,6 +536,93 @@ function renderUwCompare(){
       ${rows.length?'<div class="insight">En aktif UW: <b>'+esc(rows[0].u)+'</b> ('+rows[0].t+' görüşme)</div>':''}
       <div class="insight">Toplam ${ROWS.length} görüşme · ${uws.length} UW · ${uniq(ROWS.map(r=>r.acente)).length} farklı acente</div>
     </div></div>`;
+}
+
+// ===== 📊 UW KİŞİSEL PANELİ =====
+async function renderPanelim(){
+  $('view').innerHTML='<div class="loading">Panelin yükleniyor...</div>';
+  let d;try{d=await api('uw_panel');}catch(e){$('view').innerHTML='<div class="empty">Hata: '+(e.error||'bağlantı')+'</div>';return;}
+  const AYLAR=['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  const yS=d.yilStat||{}, aS=d.ayStat||{};
+  const ayAd=AYLAR[d.ay]||'';
+  // hedef ilerleme
+  const hedef=d.hedef||0, ger=d.hedefGerceklesen||0;
+  const yuzde=hedef?Math.min(100,Math.round(ger/hedef*100)):0;
+  const hRenk=yuzde>=100?'var(--green)':yuzde>=60?'#a16207':'var(--red)';
+  // bölge KİO durumu
+  const bk=d.bolgeKioDurum||[];
+  const benAramadim=bk.filter(k=>!k.ben_aradim);
+  const bolgeGrup={};
+  bk.forEach(k=>{const b=k.bolge||'?';if(!bolgeGrup[b])bolgeGrup[b]={top:0,ben:0};bolgeGrup[b].top++;if(k.ben_aradim)bolgeGrup[b].ben++;});
+  // liderlik
+  const lider=d.liderlik||[];
+
+  $('view').innerHTML=`
+    <div style="background:linear-gradient(135deg,#C8102E,#9a0c24);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:16px">
+      <div style="font-size:13px;opacity:.85">Merhaba ${esc(CUR.ad||'')}</div>
+      <div style="font-size:20px;font-weight:800;margin-top:2px">Ekipte ${d.benimSira}. sıradasın <span style="opacity:.7;font-size:14px">/ ${d.toplamUw} UW</span></div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="v">${yS.gorusme||0}</div><div class="l">Görüşme (yıl)</div></div>
+      <div class="kpi"><div class="v" style="color:var(--green)">${yS.kio_acente||0}</div><div class="l">Aradığım KİO</div></div>
+      <div class="kpi"><div class="v">${yS.teklif||0}</div><div class="l">Teklif</div></div>
+      <div class="kpi"><div class="v" style="font-weight:800">${yS.police||0}</div><div class="l">Poliçe</div></div>
+      <div class="kpi"><div class="v" style="color:${yS.donusum>=40?'var(--green)':yS.donusum>=20?'#a16207':'var(--red)'}">%${yS.donusum||0}</div><div class="l">Dönüşüm</div></div>
+      <div class="kpi"><div class="v">${aS.gorusme||0}</div><div class="l">${ayAd} Görüşme</div></div>
+    </div>
+
+    ${hedef?`<div class="panel" style="margin-bottom:14px"><h2>🎯 ${ayAd} Hedefim</h2>
+      <div class="body" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <span style="font-size:14px;font-weight:700">${ger} / ${hedef} görüşme</span>
+          <span style="font-size:18px;font-weight:800;color:${hRenk}">%${yuzde}</span>
+        </div>
+        <div style="height:14px;background:#f1f5f9;border-radius:8px;overflow:hidden">
+          <div style="height:100%;width:${yuzde}%;background:${hRenk};border-radius:8px;transition:width .8s ease"></div>
+        </div>
+        ${ger<hedef?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Hedefe ${hedef-ger} görüşme kaldı.</div>`:'<div style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600">🎉 Hedefini tamamladın!</div>'}
+      </div></div>`:''}
+
+    <div class="grid2">
+      <div class="panel"><h2>📍 Bölgemdeki KİO Durumu</h2>
+        <div style="padding:10px 16px 4px;font-size:12px;color:var(--muted)">Çalıştığın bölge(ler): <b>${(d.bolgelerim||[]).join(', ')||'—'}</b></div>
+        <div class="body" id="panelBolge"></div>
+      </div>
+      <div class="panel" style="border:1px solid #f5b5ae"><h2 style="background:#fdecea;color:var(--red)">⚠️ Senin Aramadığın KİO'lar (${benAramadim.length})</h2>
+        <div id="panelAranmayan" style="max-height:340px;overflow:auto"></div>
+      </div>
+    </div>
+
+    <div class="panel"><h2>🏆 Ekip Liderlik Tablosu</h2>
+      <div style="padding:8px 16px 4px;font-size:12px;color:var(--muted)">Bu yıl ekipteki herkesin aktivitesi. Sen vurgulanmış satırdasın.</div>
+      <div class="body" style="padding:8px 0"><table class="cmp" style="width:100%">
+        <thead><tr><th style="padding-left:16px">#</th><th>UW</th><th>Görüşme</th><th>KİO</th><th style="padding-right:16px">Dönüşüm</th></tr></thead>
+        <tbody>${lider.map((u,i)=>{
+          const madalya=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
+          return `<tr style="${u.ben?'background:#fff8e7;font-weight:700':''}">
+            <td style="padding-left:16px;font-weight:700">${madalya}</td>
+            <td>${esc(u.ad)}${u.ben?' <span style="color:var(--red);font-size:11px">(sen)</span>':''}</td>
+            <td>${u.gorusme}</td>
+            <td style="color:var(--green)">${u.kio}</td>
+            <td style="padding-right:16px;font-weight:700;color:${u.donusum>=40?'var(--green)':u.donusum>=20?'#a16207':'var(--red)'}">%${u.donusum}</td>
+          </tr>`;}).join('')}</tbody>
+      </table></div>
+    </div>`;
+
+  // bölge barları
+  const be=Object.entries(bolgeGrup);
+  $('panelBolge').innerHTML=be.length?be.map(([b,s])=>{
+    const o=s.top?Math.round(s.ben/s.top*100):0;
+    const rnk=o>=80?'var(--green)':o>=40?'#a16207':'var(--red)';
+    return '<div class="bar"><span class="name">'+esc(b)+'</span><span class="track"><span class="fill" style="width:'+o+'%;background:'+rnk+'"></span></span><span class="num">'+s.ben+'/'+s.top+'</span></div>';
+  }).join(''):'<div class="empty" style="padding:16px">Bölge verisi yok</div>';
+
+  // aramadığım KİO'lar
+  $('panelAranmayan').innerHTML=benAramadim.length?benAramadim.map(k=>
+    '<div class="rec" style="padding:9px 16px"><div class="acente" style="font-size:13px">'+esc(k.ad)+'</div>'+
+    '<div class="kisi">'+esc(k.il||'')+' · '+esc(k.bolge||'')+(k.ekip_aradi?' · <span style="color:#a16207">ekipten biri aramış</span>':' · <span style="color:var(--red)">hiç aranmamış</span>')+'</div></div>'
+  ).join(''):'<div class="empty" style="padding:16px">🎉 Bölgendeki tüm KİO\'ları aramışsın!</div>';
 }
 
 async function renderKioTakip(){
