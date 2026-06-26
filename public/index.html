@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Acente Arama">
 <meta name="theme-color" content="#C8102E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
   :root{--red:#C8102E;--dark:#1A1A1A;--bg:#f4f4f5;--card:#fff;--line:#e4e4e7;--muted:#71717a;--soft:#fafafa;--green:#0a7d32}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -547,6 +548,7 @@ async function renderKioTakip(){
       <div class="kpi"><div class="v">%${oranAy}</div><div class="l">Aylık Acente Kapsama</div></div>
       <div class="kpi"><div class="v" style="color:var(--red)">${data.disAyAdet||0}</div><div class="l">Bu Ay Liste Dışı</div></div>
     </div>
+    <div id="kUyari"></div>
     <div class="filters" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
       <div class="f"><label>Durum</label><select id="kDurum"><option value="">Tümü</option><option value="1">✓ Arananlar</option><option value="0">⬜ Aranmayanlar</option></select></div>
       <div class="f"><label>Sompo Bölge</label><select id="kBolge"></select></div>
@@ -554,6 +556,19 @@ async function renderKioTakip(){
       <div class="f"><label>Ara</label><input id="kSearch" placeholder="acente adı..."></div>
       <button class="reset" id="kReset">Sıfırla</button>
     </div>
+    <div class="panel" style="margin-bottom:14px"><h2>🗺️ Türkiye KİO Kapsama Haritası</h2>
+      <div class="body" style="padding:10px 16px 16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Gerçek il sınırları · renk = KİO kapsama oranı. İllerin üzerine gelin; tıklayınca o ilin acenteleri listelenir.</div>
+        <div id="trmap" style="width:100%;max-width:680px;margin:0 auto;min-height:300px"></div>
+        <div style="display:flex;gap:14px;justify-content:center;margin-top:10px;font-size:11px;color:var(--muted);flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#e5e7eb"></span>KİO yok</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#C8102E"></span>hiç aranmadı</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#e8821e"></span>kısmen</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#0a7d32"></span>tamamı arandı</span>
+        </div>
+      </div>
+    </div>
+    <div id="trtip" style="position:fixed;display:none;background:#1a1a1a;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:9999;white-space:nowrap"></div>
     <div class="grid2">
       <div class="panel"><h2>KİO Acente Listesi <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="kCount"></span></h2>
         <div id="kList" style="max-height:560px;overflow:auto"></div></div>
@@ -561,6 +576,42 @@ async function renderKioTakip(){
         <h2 style="border-top:1px solid var(--line)">Liste Dışı Aranan Acenteler</h2><div id="kDis"></div></div>
     </div>`;
   window._KIO=kio;window._DIS=dis;
+  // ⚠️ UYARI BANDI — hiç aranmayan bölgeler ve kritik KİO'lar
+  const bolgeStat={};
+  kio.forEach(k=>{const b=k.sompo_bolge||'?';if(!bolgeStat[b])bolgeStat[b]={top:0,ar:0};bolgeStat[b].top++;if(k.arandi)bolgeStat[b].ar++;});
+  const hicAranmayanBolge=Object.entries(bolgeStat).filter(([b,s])=>s.ar===0).sort((a,b)=>b[1].top-a[1].top);
+  const eksikBolge=Object.entries(bolgeStat).filter(([b,s])=>s.ar>0 && s.ar<s.top).sort((a,b)=>(b[1].top-b[1].ar)-(a[1].top-a[1].ar));
+  let uyariHtml='';
+  if(hicAranmayanBolge.length){
+    uyariHtml+='<div style="background:#fdecea;border:1px solid #f5b5ae;border-left:4px solid var(--red);border-radius:10px;padding:14px 18px;margin-bottom:12px">'+
+      '<div style="font-weight:800;color:var(--red);font-size:14px;margin-bottom:8px">⚠️ Bu yıl HİÇ aranmayan bölgeler ('+data.buYil+')</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
+      hicAranmayanBolge.map(([b,s])=>'<button class="chip" data-bolge="'+esc(b)+'" style="border-color:var(--red);color:var(--red);font-weight:700">'+esc(b)+' · '+s.top+' KİO →</button>').join('')+
+      '</div></div>';
+  }
+  if(eksikBolge.length){
+    uyariHtml+='<div style="background:#fef8e7;border:1px solid #f3d391;border-left:4px solid #eab308;border-radius:10px;padding:14px 18px;margin-bottom:12px">'+
+      '<div style="font-weight:800;color:#a16207;font-size:14px;margin-bottom:8px">🟡 Eksik kalan bölgeler — aranmayan KİO sayısı</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
+      eksikBolge.map(([b,s])=>'<button class="chip" data-bolge="'+esc(b)+'" style="border-color:#eab308;color:#a16207;font-weight:700">'+esc(b)+' · '+(s.top-s.ar)+'/'+s.top+' →</button>').join('')+
+      '</div></div>';
+  }
+  if(!uyariHtml)uyariHtml='<div style="background:#e1f5ee;border:1px solid #9ad9c2;border-left:4px solid var(--green);border-radius:10px;padding:14px 18px;margin-bottom:12px;font-weight:700;color:#085041">🎉 Tüm bölgelerde en az bir KİO arandı.</div>';
+  // otomatik özet cümlesi (AI'sız, anlık)
+  const toplamAranmayan=kio.filter(k=>!k.arandi).length;
+  const enIyiBolge=Object.entries(bolgeStat).map(([b,s])=>[b,s.top?s.ar/s.top:0,s]).sort((a,b)=>b[1]-a[1])[0];
+  const ozetCumle='📌 <b>'+data.buYil+' özeti:</b> '+kio.length+' KİO acentesinden <b>'+arandi.length+'</b>\u0027i arandı, <b style="color:var(--red)">'+toplamAranmayan+'</b>\u0027i hiç aranmadı (kapsama %'+oran+'). '+
+    (hicAranmayanBolge.length?('<b style="color:var(--red)">'+hicAranmayanBolge.map(([b])=>b).join(', ')+'</b> bölgelerine bu yıl hiç dokunulmadı. '):'')+
+    (enIyiBolge&&enIyiBolge[1]>0?('En iyi kapsama: <b style="color:var(--green)">'+enIyiBolge[0]+'</b> (%'+Math.round(enIyiBolge[1]*100)+').'):'');
+  uyariHtml='<div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 18px;margin-bottom:12px;font-size:13px;line-height:1.7">'+ozetCumle+'</div>'+uyariHtml;
+  if($('kUyari'))$('kUyari').innerHTML=uyariHtml;
+  // uyarı çiplerine tıklayınca o bölgenin aranmayanlarını listele
+  setTimeout(()=>{document.querySelectorAll('#kUyari .chip').forEach(ch=>ch.addEventListener('click',()=>{
+    if($('kBolge'))$('kBolge').value=ch.dataset.bolge;
+    if($('kDurum'))$('kDurum').value='0';
+    if(window._drawListKio)window._drawListKio();
+    $('kList')&&$('kList').scrollIntoView({behavior:'smooth',block:'center'});
+  }));},60);
   // selects
   $('kBolge').innerHTML='<option value="">Tüm Bölgeler</option>'+uniq(kio.map(k=>k.sompo_bolge)).map(b=>'<option>'+esc(b)+'</option>').join('');
   $('kIl').innerHTML='<option value="">Tüm İller</option>'+uniq(kio.map(k=>k.il)).map(b=>'<option>'+esc(b)+'</option>').join('');
@@ -587,7 +638,49 @@ async function renderKioTakip(){
   };
   ['kDurum','kBolge','kIl','kSearch'].forEach(id=>$(id).addEventListener('input',drawList));
   $('kReset').onclick=()=>{['kDurum','kBolge','kIl'].forEach(i=>$(i).value='');$('kSearch').value='';drawList()};
+  window._drawListKio=drawList;
   drawList();
+  // 🗺️ Gerçek Türkiye haritası (D3 + GeoJSON)
+  const ilStat={};
+  kio.forEach(k=>{const il=(k.il||'').trim().toUpperCase();if(!il)return;if(!ilStat[il])ilStat[il]={top:0,ar:0};ilStat[il].top++;if(k.arandi)ilStat[il].ar++;});
+  cizTurkiyeHarita(ilStat);
+}
+function trNorm(s){return (s||'').toString().toLocaleUpperCase('tr-TR')
+  .replace(/İ/g,'I').replace(/I/g,'I').replace(/Ş/g,'S').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ç/g,'C')
+  .replace(/[^A-Z]/g,'');}
+function cizTurkiyeHarita(ilStat){
+  const wrap=document.getElementById('trmap');
+  if(!wrap||typeof d3==='undefined')return;
+  const DATA={};Object.keys(ilStat).forEach(k=>{DATA[trNorm(k)]=ilStat[k];});
+  const renk=(s)=>{if(!s||!s.top)return '#e5e7eb';const o=s.ar/s.top;if(o===0)return '#C8102E';if(o>=1)return '#0a7d32';return o<0.5?'#e8821e':'#9a9b1e';};
+  // önbellek: harita verisini bir kez indir
+  const draw=(geo)=>{
+    const w=680,h=300;
+    const proj=d3.geoMercator().center([35,39]).scale(2300).translate([w/2,h/2]);
+    const path=d3.geoPath().projection(proj);
+    wrap.innerHTML='';
+    const svg=d3.select('#trmap').append('svg').attr('viewBox','0 0 '+w+' '+h).attr('width','100%').style('background','#eef3f8').style('border-radius','12px').style('border','1px solid var(--line)');
+    const tip=document.getElementById('trtip');
+    svg.selectAll('path').data(geo.features).join('path')
+      .attr('d',path).attr('stroke','#fff').attr('stroke-width',0.6)
+      .attr('fill',d=>{const p=d.properties||{};const dd=DATA[trNorm(p.name||p.Name||p.NAME_1||p.il||'')];return renk(dd);})
+      .style('cursor','pointer')
+      .on('mousemove',function(ev,d){const p=d.properties||{};const ad=(p.name||p.Name||p.NAME_1||p.il||'');const dd=DATA[trNorm(ad)];if(tip){tip.style.display='block';tip.style.left=(ev.clientX+12)+'px';tip.style.top=(ev.clientY+12)+'px';tip.innerHTML=ad+(dd?(': '+dd.ar+'/'+dd.top+' arandı (%'+Math.round(dd.ar/dd.top*100)+')'):': KİO yok');}d3.select(this).attr('stroke-width',1.5).attr('stroke','#1a1a1a');})
+      .on('mouseleave',function(){if(tip)tip.style.display='none';d3.select(this).attr('stroke-width',0.6).attr('stroke','#fff');})
+      .on('click',function(ev,d){const p=d.properties||{};const ad=(p.name||p.Name||p.NAME_1||p.il||'');const dd=DATA[trNorm(ad)];if(dd){if($('kIl'))$('kIl').value=findIlValue(ad);if(window._drawListKio)window._drawListKio();$('kList')&&$('kList').scrollIntoView({behavior:'smooth',block:'center'});}});
+  };
+  if(window._TRGEO){draw(window._TRGEO);return;}
+  wrap.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted)">Harita yükleniyor…</div>';
+  d3.json('https://cdn.jsdelivr.net/gh/alpers/Turkey-Maps-GeoJSON@master/tr-cities-utf8.json')
+    .then(geo=>{window._TRGEO=geo;draw(geo);})
+    .catch(e=>{wrap.innerHTML='<div style="padding:30px;text-align:center;color:var(--muted)">Harita yüklenemedi. İnternet bağlantısını kontrol edin.</div>';});
+}
+function findIlValue(ad){
+  // kIl select'inde eşleşen değeri bul (Türkçe il adı)
+  const sel=document.getElementById('kIl');if(!sel)return '';
+  const n=trNorm(ad);
+  for(const o of sel.options){if(trNorm(o.value)===n)return o.value;}
+  return '';
 }
 
 async function renderHedef(){
