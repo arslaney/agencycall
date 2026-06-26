@@ -145,7 +145,24 @@ module.exports = async (req, res) => {
       });
       const disListe = Object.entries(disMap).map(([acente, v]) => ({ acente, gorusme_sayisi: v.sayi, son_gorusme: v.son }));
       const disAyAdet = Object.keys(disMapAy).length;
-      return res.json({ kio: liste, dis: disListe, buYil, buAy, disAyAdet });
+
+      // === SEGMENT İSTATİSTİKLERİ (KİO / Aday KİO / Diğer × yıllık + aylık) ===
+      const segRows = await sb('acente_gorusmeler_kio?select=acente,kio_kod,kio_mu,aday_kio,ay,yil');
+      function segHesapla(filtreFn) {
+        const r = { kio: { g: 0, set: new Set() }, aday: { g: 0, set: new Set() }, diger: { g: 0, set: new Set() } };
+        segRows.forEach(x => {
+          if (!filtreFn(x)) return;
+          if (x.kio_mu) { r.kio.g++; r.kio.set.add(x.kio_kod); }
+          else if (x.aday_kio) { r.aday.g++; r.aday.set.add((x.acente || '').toLocaleUpperCase('tr-TR').trim()); }
+          else { r.diger.g++; r.diger.set.add((x.acente || '').toLocaleUpperCase('tr-TR').trim()); }
+        });
+        const fmt = (o) => ({ gorusme: o.g, ayri: o.set.size, ort: o.set.size ? Math.round(o.g / o.set.size * 10) / 10 : 0 });
+        return { kio: fmt(r.kio), aday: fmt(r.aday), diger: fmt(r.diger) };
+      }
+      const segmentYil = segHesapla(x => x.yil === buYil);
+      const segmentAy = segHesapla(x => x.yil === buYil && x.ay === buAy);
+
+      return res.json({ kio: liste, dis: disListe, buYil, buAy, disAyAdet, segmentYil, segmentAy });
     }
 
     // --- KİO MANUEL BAĞLAMA (admin) — bir acente adını bir KİO koduna eşle ---
