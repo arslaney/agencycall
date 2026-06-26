@@ -388,7 +388,7 @@ function draw(isAdmin){
       (r.bolge?'<span class="tag bolge">'+esc(r.bolge)+'</span>':'')+
       (r.tur?'<span class="'+tc+'">'+esc(r.tur)+'</span>':'')+
       (r.akis?'<span class="tag akis">'+esc(r.akis)+'</span>':'')+'</div>'+
-      '<div class="acente" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px" title="Geçmişi gör" onclick="acenteGecmis(this.dataset.ad)" data-ad="'+esc(r.acente)+'">'+esc(r.acente)+'</div>'+
+      '<div class="acente" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px" title="Geçmişi gör" onclick="acenteGecmis(this.dataset.ad)" data-ad="'+esc(r.acente)+'">'+esc(r.acente)+(r.aday_kio?' <span title="KİO adayı" style="font-size:12px">⭐</span>':'')+'</div>'+
       (r.kisi?'<div class="kisi">👤 '+esc(r.kisi)+'</div>':'')+
       (r.konu?'<div class="konu">'+esc(r.konu)+'</div>':'')+
       (r.sonuc?'<div class="sonuc">'+esc(r.sonuc)+'</div>':'')+
@@ -420,12 +420,22 @@ function renderForm(){
           <select id="iKonuBas">${KONULAR.map(k=>'<option'+(((e.konu||'').split(' — ')[0]===k)?' selected':'')+'>'+k+'</option>').join('')}</select></div>
         <div class="full"><label>Konu Notu (opsiyonel)</label><textarea id="iKonuNot" placeholder="Detay / açıklama">${esc((e.konu||'').includes(' — ')?(e.konu||'').split(' — ').slice(1).join(' — '):((KONULAR.includes((e.konu||'').split(' — ')[0]))?'':(e.konu||'')))}</textarea></div>
         <div class="full"><label>Sonuç</label><textarea id="iSonuc" placeholder="Görüşme sonucu / aksiyon">${esc(e.sonuc||'')}</textarea></div>
+        <div class="full" style="background:#fff8e7;border:1px solid #f3d391;border-radius:10px;padding:12px 14px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:9px;cursor:pointer;margin:0">
+            <input type="checkbox" id="iAdayKio" ${e.aday_kio?'checked':''} style="width:18px;height:18px;cursor:pointer">
+            <span style="font-weight:700;color:#a16207">⭐ Bu acente KİO adayı olabilir</span>
+          </label>
+          <div style="font-size:12px;color:var(--muted);margin:6px 0 0 27px">KİO listesinde yok ama potansiyel görüyorsanız işaretleyin — yönetici aday havuzunda takip eder.</div>
+          <input id="iAdayNot" value="${esc(e.aday_not||'')}" placeholder="Neden aday? (opsiyonel: ciro, branş, ilişki...)" style="margin:8px 0 0 27px;width:calc(100% - 27px);padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px${e.aday_kio?'':';display:none'}" data-adaynot>
+        </div>
       </div>
       <button class="save" id="saveBtn" onclick="saveForm()">${EDIT?'Güncelle':'Kaydet'}</button>
       ${EDIT?'<button class="cancel" onclick="EDIT=null;showView(\'ekle\')">İptal</button>':''}
       <span id="formMsg" style="margin-left:14px;font-size:13px;color:var(--green);font-weight:600"></span>
     </div>`;
   kioBolgeYukle();
+  const adayCb=$('iAdayKio');
+  if(adayCb)adayCb.addEventListener('change',()=>{const n=document.querySelector('[data-adaynot]');if(n)n.style.display=adayCb.checked?'block':'none';});
 }
 window._KIOBOLGE=[];
 async function kioBolgeYukle(){
@@ -461,7 +471,9 @@ async function saveForm(){
   const kbas=$('iKonuBas').value;const knot=$('iKonuNot').value.trim();
   const konu=knot?(kbas+' — '+knot):kbas;
   const primVal=$('iPrim').value.trim();
-  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,secili_kio_kod:seciliKod,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:konu,sonuc:$('iSonuc').value.trim(),durum:$('iDurum').value,prim:primVal===''?null:parseFloat(primVal)};
+  const adayKio=$('iAdayKio')?$('iAdayKio').checked:false;
+  const adayNot=$('iAdayNot')?$('iAdayNot').value.trim():'';
+  const p={id:EDIT?EDIT.id:undefined,tarih:$('iTarih').value,bolge:$('iBolge').value,acente:ac,secili_kio_kod:seciliKod,kisi:$('iKisi').value.trim(),akis:$('iAkis').value.trim(),tur:$('iTur').value,konu:konu,sonuc:$('iSonuc').value.trim(),durum:$('iDurum').value,prim:primVal===''?null:parseFloat(primVal),aday_kio:adayKio,aday_not:adayKio?(adayNot||null):null};
   $('saveBtn').disabled=true;
   try{
     if(EDIT){await api('update',{payload:p});EDIT=null;$('formMsg').textContent='✓ Güncellendi';}
@@ -578,6 +590,10 @@ async function renderKioTakip(){
         <div id="kList" style="max-height:560px;overflow:auto"></div></div>
       <div class="panel"><h2>Aranmayan KİO — Bölge Dağılımı</h2><div class="body" id="kBolgeBar"></div>
         <h2 style="border-top:1px solid var(--line)">Liste Dışı Aranan Acenteler</h2><div id="kDis"></div></div>
+    </div>
+    <div class="panel" style="margin-top:4px;border:1px solid #f3d391"><h2 style="background:#fff8e7;color:#a16207">🎯 Aday KİO Havuzu <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="adayCount"></span></h2>
+      <div style="padding:8px 16px;font-size:12px;color:var(--muted)">UW'lerin "KİO adayı olabilir" diye işaretlediği, KİO listesinde olmayan potansiyel acenteler. Olgunlaşanı gerçek KİO listesine eklemeyi değerlendirin.</div>
+      <div id="adayHavuz"></div>
     </div>`;
   window._KIO=kio;window._DIS=dis;
   // ⚠️ UYARI BANDI — hiç aranmayan bölgeler ve kritik KİO'lar
@@ -648,6 +664,26 @@ async function renderKioTakip(){
   const ilStat={};
   kio.forEach(k=>{const il=(k.il||'').trim().toUpperCase();if(!il)return;if(!ilStat[il])ilStat[il]={top:0,ar:0};ilStat[il].top++;if(k.arandi)ilStat[il].ar++;});
   cizTurkiyeHarita(ilStat);
+  adayHavuzYukle();
+}
+async function adayHavuzYukle(){
+  const box=$('adayHavuz');if(!box)return;
+  box.innerHTML='<div style="padding:16px;color:var(--muted)">Yükleniyor...</div>';
+  let d;try{d=await api('aday_havuz');}catch(e){box.innerHTML='<div class="empty" style="padding:16px">Yüklenemedi</div>';return;}
+  const havuz=(d.havuz||[]);
+  // gerçek KİO olmuşları ayır (terfi etmiş adaylar)
+  const bekleyen=havuz.filter(h=>!h.kio_mu);
+  const terfi=havuz.filter(h=>h.kio_mu);
+  if($('adayCount'))$('adayCount').textContent=bekleyen.length+' aday'+(terfi.length?' · '+terfi.length+' KİO oldu':'');
+  if(!havuz.length){box.innerHTML='<div class="empty" style="padding:20px">Henüz aday işaretlenmemiş. Görüşme eklerken "⭐ KİO adayı olabilir" kutusunu işaretleyin.</div>';return;}
+  const kart=(h,terfiMi)=>`<div class="rec" style="padding:12px 16px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap${terfiMi?';opacity:.7':''}">
+    <div style="flex:1;min-width:220px">
+      <div class="acente" style="font-size:14px;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px" onclick="acenteGecmis(this.dataset.ad)" data-ad="${esc(h.acente)}">${esc(h.acente)} ${terfiMi?'<span class="tag" style="background:var(--green);color:#fff;font-size:10px">✓ KİO oldu</span>':''}</div>
+      <div class="kisi">${esc(h.bolge||'')} · ${h.kez} görüşme · son: ${esc(h.son_tarih||'')} · ${esc((h.uwlar||[]).join(', '))}</div>
+      ${(h.notlar&&h.notlar.length)?'<div style="font-size:12px;color:#a16207;margin-top:4px;background:#fff8e7;border-radius:6px;padding:6px 9px">'+h.notlar.map(esc).join('<br>')+'</div>':''}
+    </div>
+  </div>`;
+  box.innerHTML=bekleyen.map(h=>kart(h,false)).join('')+(terfi.length?'<div style="padding:8px 16px;font-size:12px;color:var(--green);font-weight:600;border-top:1px solid var(--line)">✓ Aday iken gerçek KİO listesine giren acenteler:</div>'+terfi.map(h=>kart(h,true)).join(''):'');
 }
 function trNorm(s){return (s||'').toString().toLocaleUpperCase('tr-TR')
   .replace(/İ/g,'I').replace(/I/g,'I').replace(/Ş/g,'S').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ç/g,'C')
