@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Acente Aramaları Sistemi — Sompo</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Acente Arama">
+<meta name="theme-color" content="#C8102E">
 <style>
   :root{--red:#C8102E;--dark:#1A1A1A;--bg:#f4f4f5;--card:#fff;--line:#e4e4e7;--muted:#71717a;--soft:#fafafa;--green:#0a7d32}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -711,6 +719,32 @@ async function exportKio(){
 initLogin();
 const sc=sessionStorage.getItem('acur');
 if(sc){try{const o=JSON.parse(sc);CUR=o.u;PASS=o.p;enterApp();}catch(e){}}
+
+// PWA — service worker kaydı
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
+}
+// PWA — "Uygulamayı Yükle" butonu
+let _deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',(e)=>{
+  e.preventDefault();_deferredPrompt=e;showInstallBtn();
+});
+window.addEventListener('appinstalled',()=>{_deferredPrompt=null;const b=document.getElementById('installBtn');if(b)b.remove();});
+function showInstallBtn(){
+  if(document.getElementById('installBtn'))return;
+  const b=document.createElement('button');
+  b.id='installBtn';
+  b.textContent='⬇️ Uygulamayı Yükle';
+  b.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;background:var(--red);color:#fff;border:none;padding:12px 18px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(200,16,46,.4)';
+  b.onclick=async()=>{
+    if(!_deferredPrompt)return;
+    _deferredPrompt.prompt();
+    const r=await _deferredPrompt.userChoice;
+    if(r.outcome==='accepted'){b.remove();}
+    _deferredPrompt=null;
+  };
+  document.body.appendChild(b);
+}
 </script>
 </body>
 </html>
