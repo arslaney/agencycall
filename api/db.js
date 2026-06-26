@@ -271,7 +271,8 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
         konu: p.konu || null, sonuc: p.sonuc || null,
         durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null,
-        secili_kio_kod: p.secili_kio_kod || null
+        secili_kio_kod: p.secili_kio_kod || null,
+        aday_kio: p.aday_kio === true, aday_not: p.aday_kio === true ? (p.aday_not || null) : null
       };
       const out = await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(rec) });
       await logKaydet(uw_id, meAd, 'ekle', `${rec.acente}${rec.kisi ? ' / ' + rec.kisi : ''}`, out[0] && out[0].id);
@@ -292,7 +293,8 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         kisi: p.kisi || null, akis_no: p.akis || null, tur: p.tur || null,
         konu: p.konu || null, sonuc: p.sonuc || null,
         durum: p.durum || 'Görüşüldü', prim: (p.prim || p.prim === 0) ? p.prim : null,
-        secili_kio_kod: p.secili_kio_kod || null
+        secili_kio_kod: p.secili_kio_kod || null,
+        aday_kio: p.aday_kio === true, aday_not: p.aday_kio === true ? (p.aday_not || null) : null
       };
       const out = await sb(`acente_gorusmeler?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(upd) });
       await logKaydet(uw_id, meAd, 'guncelle', `${upd.acente}`, id);
@@ -449,6 +451,31 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         donusum: s.teklif ? Math.round(s.police / s.teklif * 100) : 0
       })).sort((a, b) => b.gorusme - a.gorusme);
       return res.json({ aylik, liderlik });
+    }
+
+    // === ADAY KİO HAVUZU ===
+    // aday işaretli görüşmeler (UW kendi, admin hepsi). Zaten gerçek KİO olanları çıkar.
+    if (action === 'aday_havuz') {
+      const filtre = isAdmin ? '' : `&uw_id=eq.${encodeURIComponent(uw_id)}`;
+      const rows = await sb(`acente_gorusmeler_kio?select=*&aday_kio=eq.true${filtre}&order=tarih.desc`);
+      const us = await sb('acente_uw?select=id,ad');
+      const adMap = {}; us.forEach(u => { adMap[u.id] = u.ad; });
+      // acenteye göre grupla (aynı aday birden çok kez işaretlenmiş olabilir)
+      const grup = {};
+      rows.forEach(r => {
+        const key = (r.acente || '').toLocaleUpperCase('tr-TR').trim();
+        if (!grup[key]) grup[key] = { acente: r.acente, bolge: r.bolge, kio_mu: false, kez: 0, son_tarih: r.tarih, uwlar: new Set(), notlar: [], ornek_id: r.id };
+        grup[key].kez++;
+        if (r.kio_mu) grup[key].kio_mu = true; // artık gerçek KİO olmuş
+        if (r.tarih > grup[key].son_tarih) grup[key].son_tarih = r.tarih;
+        grup[key].uwlar.add(adMap[r.uw_id] || r.uw_id);
+        if (r.aday_not) grup[key].notlar.push(adMap[r.uw_id] ? `${adMap[r.uw_id]}: ${r.aday_not}` : r.aday_not);
+      });
+      const havuz = Object.values(grup).map(g => ({
+        acente: g.acente, bolge: g.bolge, kio_mu: g.kio_mu, kez: g.kez,
+        son_tarih: g.son_tarih, uwlar: [...g.uwlar], notlar: g.notlar, ornek_id: g.ornek_id
+      })).sort((a, b) => (b.son_tarih || '').localeCompare(a.son_tarih || ''));
+      return res.json({ havuz });
     }
 
     return res.status(400).json({ error: 'Bilinmeyen aksiyon' });
