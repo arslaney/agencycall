@@ -7,7 +7,7 @@
 <style>
   :root{--red:#C8102E;--dark:#1A1A1A;--bg:#f4f4f5;--card:#fff;--line:#e4e4e7;--muted:#71717a;--soft:#fafafa;--green:#0a7d32}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--dark);line-height:1.5}
+  body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:linear-gradient(180deg,#eef0f3 0%,#f6f6f8 240px,#f4f4f5 100%);background-attachment:fixed;color:var(--dark);line-height:1.5}
   .hidden{display:none!important}
   #login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1A1A1A,#2d2d2d);padding:16px}
   .loginbox{background:#fff;border-radius:14px;padding:38px 34px;width:360px;max-width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)}
@@ -22,7 +22,7 @@
   .loginbox button:disabled{opacity:.6;cursor:wait}
   .loginbox .err{color:var(--red);font-size:12px;margin-top:10px;text-align:center;min-height:16px}
   .loginbox .hint{font-size:11px;color:var(--muted);margin-top:18px;text-align:center;line-height:1.6}
-  header{background:linear-gradient(rgba(18,18,20,0.74),rgba(18,18,20,0.82)),url('header-bg.jpg');background-size:cover;background-position:center 42%;color:#fff;padding:30px 26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  header{background:linear-gradient(rgba(18,18,20,0.72),rgba(18,18,20,0.80)),url('header-bg.jpg');background-size:cover;background-position:center 42%;color:#fff;padding:42px 26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
   header .brand{display:flex;align-items:center;gap:11px}
   header .dot{width:11px;height:11px;border-radius:50%;background:var(--red)}
   header h1{font-size:16px;font-weight:700}
@@ -36,7 +36,7 @@
   .tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px}
   .tab.on{color:var(--red);border-bottom-color:var(--red)}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
-  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(16,18,27,0.04),0 4px 12px rgba(16,18,27,0.03)}
   .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--red)}
   .kpi .v{font-size:26px;font-weight:800}.kpi .l{font-size:11px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
   .filters{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
@@ -45,7 +45,7 @@
   .filters .reset{padding:8px 14px;background:var(--soft);border:1px solid var(--line);border-radius:6px;font-size:12px;cursor:pointer;font-weight:600}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
   @media(max-width:880px){.grid2{grid-template-columns:1fr}}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(16,18,27,0.04),0 6px 16px rgba(16,18,27,0.03)}
   .panel h2{font-size:13px;font-weight:700;padding:13px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
   .panel h2::before{content:'';width:8px;height:8px;background:var(--red);border-radius:2px}
   .panel .body{padding:8px 16px 14px}
