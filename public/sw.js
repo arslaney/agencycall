@@ -1,8 +1,6 @@
-// Sompo Acente Aramaları — Service Worker
-const CACHE = 'acente-v1';
+// Sompo Acente Aramaları — Service Worker (v3 — HTML her zaman taze)
+const CACHE = 'acente-v3';
 const SHELL = [
-  '/',
-  '/index.html',
   '/sompo-logo.png',
   '/header-bg.jpg',
   '/icon-192.png',
@@ -10,15 +8,11 @@ const SHELL = [
   '/favicon-32.png'
 ];
 
-// Kurulumda kabuğu önbelleğe al
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {})
-  );
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
   self.skipWaiting();
 });
 
-// Eski önbellekleri temizle
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -30,13 +24,27 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // API çağrıları: her zaman ağdan (canlı veri), önbelleğe alma
-  if (url.pathname.startsWith('/api/')) {
-    return; // tarayıcı normal şekilde ağdan alsın
-  }
-  // Sadece GET isteklerini ele al
+  // API: her zaman ağdan, önbelleğe alma
+  if (url.pathname.startsWith('/api/')) return;
   if (e.request.method !== 'GET') return;
-  // Statik içerik: önce ağ, başarısızsa önbellek (offline fallback)
+
+  // HTML/sayfa istekleri ve index.html: HER ZAMAN ağdan taze (önbelleğe alma)
+  const isHTML = e.request.mode === 'navigate' ||
+                 url.pathname === '/' ||
+                 url.pathname.endsWith('.html');
+  if (isHTML) {
+    e.respondWith(
+      fetch(e.request, { cache: 'no-store' }).catch(() =>
+        caches.match('/sompo-logo.png').then(() => new Response(
+          '<h1>Bağlantı yok</h1><p>İnternet bağlantınızı kontrol edip sayfayı yenileyin.</p>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        ))
+      )
+    );
+    return;
+  }
+
+  // Diğer statik dosyalar (logo, ikon): önce ağ, başarısızsa önbellek
   e.respondWith(
     fetch(e.request)
       .then((res) => {
@@ -44,6 +52,6 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
         return res;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('/index.html')))
+      .catch(() => caches.match(e.request))
   );
 });
