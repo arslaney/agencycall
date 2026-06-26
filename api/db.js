@@ -352,8 +352,14 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
       const hepsi = isAdmin && p.hepsi === true;
       const filtre = hepsi ? '' : `&uw_id=eq.${encodeURIComponent(uw_id)}`;
       const aktifFiltre = p.tamamlanan === true ? '' : '&tamamlandi=eq.false';
-      const rows = await sb(`acente_takip?select=*,acente_uw(ad)&order=hatirlatma_tarihi.asc${filtre}${aktifFiltre}`);
-      return res.json({ takipler: rows.map(r => ({ ...r, uw_ad: r.acente_uw ? r.acente_uw.ad : r.uw_id })) });
+      const rows = await sb(`acente_takip?select=*&order=hatirlatma_tarihi.asc${filtre}${aktifFiltre}`);
+      // UW adlarını ayrı çek (embed yerine, daha sağlam)
+      let adMap = {};
+      if (hepsi && rows.length) {
+        const us = await sb('acente_uw?select=id,ad');
+        us.forEach(u => { adMap[u.id] = u.ad; });
+      }
+      return res.json({ takipler: rows.map(r => ({ ...r, uw_ad: adMap[r.uw_id] || r.uw_id })) });
     }
     // tamamla / sil
     if (action === 'takip_tamamla') {
@@ -412,23 +418,26 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
       const p = payload || {};
       const ad = (p.acente || '').trim();
       if (!ad) return res.status(400).json({ error: 'acente gerekli' });
-      // aynı acente adına ait tüm görüşmeler (UW sadece kendi, admin hepsi)
       const filtre = isAdmin ? '' : `&uw_id=eq.${encodeURIComponent(uw_id)}`;
-      const rows = await sb(`acente_gorusmeler_kio?select=*,acente_uw(ad)&acente=eq.${encodeURIComponent(ad)}${filtre}&order=tarih.desc`);
-      return res.json({ gorusmeler: rows.map(r => ({ ...r, uw_ad: r.acente_uw ? r.acente_uw.ad : r.uw_id })) });
+      const rows = await sb(`acente_gorusmeler_kio?select=*&acente=eq.${encodeURIComponent(ad)}${filtre}&order=tarih.desc`);
+      const us = await sb('acente_uw?select=id,ad');
+      const adMap = {}; us.forEach(u => { adMap[u.id] = u.ad; });
+      return res.json({ gorusmeler: rows.map(r => ({ ...r, uw_ad: adMap[r.uw_id] || r.uw_id })) });
     }
 
     // === TREND & LİDERLİK (admin) ===
     if (action === 'trend') {
       if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
-      const rows = await sb('acente_gorusmeler_kio?select=uw_id,ay,yil,tur,durum,prim,kio_mu,acente_uw(ad)&order=tarih.asc');
+      const rows = await sb('acente_gorusmeler_kio?select=uw_id,ay,yil,tur,durum,prim,kio_mu&order=tarih.asc');
+      const us = await sb('acente_uw?select=id,ad');
+      const adMap = {}; us.forEach(u => { adMap[u.id] = u.ad; });
       // aylık toplam
       const aylik = {};
       const uwStat = {};
       rows.forEach(r => {
         const ay = `${r.yil}-${String(r.ay).padStart(2, '0')}`;
         if (r.ay && r.yil) aylik[ay] = (aylik[ay] || 0) + 1;
-        const uw = r.acente_uw ? r.acente_uw.ad : r.uw_id;
+        const uw = adMap[r.uw_id] || r.uw_id;
         if (!uwStat[uw]) uwStat[uw] = { gorusme: 0, kio: 0, teklif: 0, police: 0, prim: 0 };
         uwStat[uw].gorusme++;
         if (r.kio_mu) uwStat[uw].kio++;
