@@ -193,8 +193,8 @@ async function enterApp(){
 }
 function buildTabs(){
   let tabs;
-  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['hedef','🏆 Hedefler'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
-  else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
+  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['eslestir','🔗 KİO Eşleştir'],['trend','📈 Trend & Liderlik'],['hedef','🏆 Hedefler'],['takip','🔔 Takip'],['kayitlar','📜 Kayıtlar'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
+  else tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['takip','🔔 Takip'],['yukle','📁 Excel Yükle']];
   $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
   qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
   showView(tabs[0][0]);
@@ -206,6 +206,10 @@ async function showView(v){
     if(v==='benim'){await loadRows(true);renderDashboard(false);}
     else if(v==='ozet'){await loadRows(false);renderDashboard(true);}
     else if(v==='kio'){await renderKioTakip();}
+    else if(v==='eslestir'){await renderEslestir();}
+    else if(v==='trend'){await renderTrend();}
+    else if(v==='takip'){await renderTakip();}
+    else if(v==='kayitlar'){await renderKayitlar();}
     else if(v==='hedef'){await renderHedef();}
     else if(v==='uwkarsi'){await loadRows();renderUwCompare();}
     else if(v==='rapor'){await loadRows();renderRapor();}
@@ -384,7 +388,7 @@ function draw(isAdmin){
       (r.bolge?'<span class="tag bolge">'+esc(r.bolge)+'</span>':'')+
       (r.tur?'<span class="'+tc+'">'+esc(r.tur)+'</span>':'')+
       (r.akis?'<span class="tag akis">'+esc(r.akis)+'</span>':'')+'</div>'+
-      '<div class="acente">'+esc(r.acente)+'</div>'+
+      '<div class="acente" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px" title="Geçmişi gör" onclick="acenteGecmis(this.dataset.ad)" data-ad="'+esc(r.acente)+'">'+esc(r.acente)+'</div>'+
       (r.kisi?'<div class="kisi">👤 '+esc(r.kisi)+'</div>':'')+
       (r.konu?'<div class="konu">'+esc(r.konu)+'</div>':'')+
       (r.sonuc?'<div class="sonuc">'+esc(r.sonuc)+'</div>':'')+
@@ -681,6 +685,186 @@ function findIlValue(ad){
   const n=trNorm(ad);
   for(const o of sel.options){if(trNorm(o.value)===n)return o.value;}
   return '';
+}
+
+// ===== 🔗 MANUEL KİO EŞLEŞTİRME (admin) =====
+let _KIOHEPSI=[];
+async function renderEslestir(){
+  $('view').innerHTML='<div class="loading">Eşleşmeyen kayıtlar yükleniyor...</div>';
+  let data,kioList;
+  try{
+    data=await api('eslesmeyenler');
+    if(!_KIOHEPSI.length){const kh=await api('kio_hepsi');_KIOHEPSI=kh.kio||[];}
+  }catch(e){$('view').innerHTML='<div class="empty">Hata: '+(e.error||'')+'</div>';return;}
+  const kayitlar=data.kayitlar||[];
+  const kioOpts='<option value="">— KİO seç —</option>'+_KIOHEPSI.map(k=>'<option value="'+k.kod+'">'+esc(k.ad)+' · '+esc(k.il||'')+'</option>').join('');
+  $('view').innerHTML=`
+    <div class="formcard">
+      <h2>🔗 Manuel KİO Eşleştirme</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Otomatik eşleşmeyen görüşmeler aşağıda. Her birini doğru KİO'ya bağlayın; gerçekten KİO değilse "KİO değil" deyin (liste dışı kalır). Eşleştirdiğiniz kayıtlar haritada ve kapsama oranında anında doğru görünür.</p>
+      <div style="font-size:13px;font-weight:700;margin:10px 0">${kayitlar.length} eşleşmeyen kayıt</div>
+    </div>
+    <div class="panel" style="margin-top:14px"><div id="esList"></div></div>`;
+  const wrap=$('esList');
+  if(!kayitlar.length){wrap.innerHTML='<div class="empty" style="padding:24px">🎉 Eşleşmeyen kayıt yok, hepsi bağlı!</div>';return;}
+  wrap.innerHTML=kayitlar.map(k=>`
+    <div class="rec" style="padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap" data-id="${k.id}">
+      <div style="flex:1;min-width:200px">
+        <div class="acente" style="font-size:14px">${esc(k.acente)}</div>
+        <div class="kisi">${esc(k.kisi||'')} · ${esc(k.bolge||'')} · ${esc(k.tarih||'')}</div>
+      </div>
+      <select class="esSel" data-id="${k.id}" data-ad="${esc(k.acente)}" style="min-width:240px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px">${kioOpts}</select>
+      <button class="esKaydet" data-id="${k.id}" style="background:var(--green);color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Bağla</button>
+      <button class="esDegil" data-id="${k.id}" data-ad="${esc(k.acente)}" style="background:#fff;color:var(--muted);border:1px solid var(--line);padding:7px 12px;border-radius:6px;font-size:13px;cursor:pointer">KİO değil</button>
+    </div>`).join('');
+  wrap.querySelectorAll('.esKaydet').forEach(b=>b.addEventListener('click',async()=>{
+    const id=b.dataset.id;const sel=wrap.querySelector('.esSel[data-id="'+id+'"]');
+    if(!sel.value){alert('Önce bir KİO seçin');return;}
+    b.disabled=true;b.textContent='...';
+    try{await api('kio_esle',{payload:{id,kio_kod:sel.value,acente_ad:sel.dataset.ad}});
+      const row=wrap.querySelector('.rec[data-id="'+id+'"]');row.style.opacity='.4';row.innerHTML='<div style="padding:4px 0;color:var(--green);font-weight:600">✓ Bağlandı</div>';
+    }catch(e){alert(e.error||'Hata');b.disabled=false;b.textContent='Bağla';}
+  }));
+  wrap.querySelectorAll('.esDegil').forEach(b=>b.addEventListener('click',async()=>{
+    const id=b.dataset.id;b.disabled=true;
+    try{await api('kio_esle',{payload:{id,kio_kod:null,acente_ad:b.dataset.ad}});
+      const row=wrap.querySelector('.rec[data-id="'+id+'"]');row.style.opacity='.4';row.innerHTML='<div style="padding:4px 0;color:var(--muted)">— KİO değil olarak işaretlendi</div>';
+    }catch(e){alert(e.error||'Hata');b.disabled=false;}
+  }));
+}
+
+// ===== 📈 TREND & LİDERLİK (admin) =====
+async function renderTrend(){
+  $('view').innerHTML='<div class="loading">Trend verileri hesaplanıyor...</div>';
+  let d;try{d=await api('trend');}catch(e){$('view').innerHTML='<div class="empty">Hata: '+(e.error||'')+'</div>';return;}
+  const aylik=d.aylik||{},lider=d.liderlik||[];
+  const AYISIM=['','Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+  const aylar=Object.keys(aylik).sort();
+  const sonAylar=aylar.slice(-6);
+  const buAy=sonAylar[sonAylar.length-1],oncekiAy=sonAylar[sonAylar.length-2];
+  const buV=aylik[buAy]||0,onV=aylik[oncekiAy]||0;
+  const degisim=onV?Math.round((buV-onV)/onV*100):0;
+  const mx=Math.max(1,...sonAylar.map(a=>aylik[a]));
+  const fmtAy=(a)=>{const[y,m]=a.split('-');return AYISIM[parseInt(m,10)]+' '+y.slice(2);};
+  $('view').innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="v">${buV}</div><div class="l">Bu Ay Görüşme (${buAy?fmtAy(buAy):'-'})</div></div>
+      <div class="kpi"><div class="v" style="color:${degisim>=0?'var(--green)':'var(--red)'}">${degisim>=0?'▲ +':'▼ '}${degisim}%</div><div class="l">Önceki Aya Göre</div></div>
+      <div class="kpi"><div class="v">${lider.length}</div><div class="l">Aktif UW</div></div>
+      <div class="kpi"><div class="v" style="color:var(--green)">₺${lider.reduce((s,u)=>s+u.prim,0).toLocaleString('tr-TR')}</div><div class="l">Toplam Prim</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:14px"><h2>📈 Son 6 Ay Görüşme Trendi</h2><div class="body" id="trendBar"></div></div>
+    <div class="panel"><h2>🏆 UW Liderlik Tablosu</h2><div class="body" style="padding:8px 0">
+      <table class="cmp" style="width:100%"><thead><tr><th style="padding-left:16px">#</th><th>UW</th><th>Görüşme</th><th>KİO</th><th>Teklif</th><th>Poliçe</th><th>Dönüşüm</th><th style="padding-right:16px">Prim</th></tr></thead>
+      <tbody>${lider.map((u,i)=>{
+        const madalya=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
+        return `<tr>
+          <td style="padding-left:16px;font-weight:700">${madalya}</td>
+          <td style="font-weight:700">${esc(u.ad)}</td>
+          <td>${u.gorusme}</td>
+          <td style="color:var(--green)">${u.kio}</td>
+          <td>${u.teklif}</td>
+          <td style="font-weight:700">${u.police}</td>
+          <td style="font-weight:700;color:${u.donusum>=40?'var(--green)':u.donusum>=20?'#a16207':'var(--red)'}">%${u.donusum}</td>
+          <td style="padding-right:16px;color:var(--green)">₺${u.prim.toLocaleString('tr-TR')}</td>
+        </tr>`;}).join('')}</tbody></table>
+    </div></div>`;
+  $('trendBar').innerHTML=sonAylar.map(a=>{
+    const v=aylik[a];
+    return '<div class="bar" style="--w:'+(v/mx*100)+'%"><span class="name">'+fmtAy(a)+'</span><span class="track"><span class="fill"></span></span><span class="num">'+v+'</span></div>';
+  }).join('')||'<div class="empty">Veri yok</div>';
+  setTimeout(()=>document.querySelectorAll('.bar:not(.anim)').forEach(b=>b.classList.add('anim')),50);
+}
+
+// ===== 🔔 TAKİP HATIRLATMALARI =====
+async function renderTakip(){
+  $('view').innerHTML='<div class="loading">Takipler yükleniyor...</div>';
+  const hepsiGor=isAdmin;
+  let d;try{d=await api('takip_list',{payload:{hepsi:hepsiGor}});}catch(e){$('view').innerHTML='<div class="empty">Hata: '+(e.error||'')+'</div>';return;}
+  const takipler=d.takipler||[];
+  const bugun=new Date().toISOString().slice(0,10);
+  const gecmis=takipler.filter(t=>t.hatirlatma_tarihi<bugun);
+  const bugunler=takipler.filter(t=>t.hatirlatma_tarihi===bugun);
+  const gelecek=takipler.filter(t=>t.hatirlatma_tarihi>bugun);
+  $('view').innerHTML=`
+    <div class="formcard">
+      <h2>🔔 Yeni Takip Hatırlatması</h2>
+      <div class="formgrid">
+        <div class="full"><label>Acente / Konu</label><input id="tkAcente" placeholder="Hangi acente / ne için"></div>
+        <div><label>Hatırlatma Tarihi</label><input id="tkTarih" type="date" value="${bugun}"></div>
+        <div class="full"><label>Not (opsiyonel)</label><input id="tkNot" placeholder="Detay"></div>
+      </div>
+      <button class="save" onclick="takipEkle()">➕ Hatırlatma Ekle</button>
+      <span id="tkMsg" style="margin-left:12px;font-size:13px;color:var(--green);font-weight:600"></span>
+    </div>
+    ${gecmis.length?'<div class="panel" style="margin-top:14px;border-color:#f5b5ae"><h2 style="color:var(--red)">⏰ Geçmiş / Vadesi Geçen ('+gecmis.length+')</h2><div id="tkGecmis"></div></div>':''}
+    <div class="panel" style="margin-top:14px"><h2>📅 Bugün (${bugunler.length})</h2><div id="tkBugun"></div></div>
+    <div class="panel" style="margin-top:14px"><h2>🔜 Gelecek (${gelecek.length})</h2><div id="tkGelecek"></div></div>`;
+  const kart=(t)=>`<div class="rec" style="padding:11px 16px;display:flex;align-items:center;gap:10px" data-id="${t.id}">
+    <div style="flex:1"><div class="acente" style="font-size:14px">${esc(t.acente)}</div>
+    <div class="kisi">${esc(t.hatirlatma_tarihi)}${t.not_metni?' · '+esc(t.not_metni):''}${(isAdmin&&t.uw_ad)?' · '+esc(t.uw_ad):''}</div></div>
+    <button onclick="takipTamamla('${t.id}')" style="background:var(--green);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">✓ Tamam</button>
+    <button onclick="takipSil('${t.id}')" style="background:#fff;color:var(--red);border:1px solid var(--line);padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer">Sil</button>
+  </div>`;
+  if($('tkGecmis'))$('tkGecmis').innerHTML=gecmis.map(kart).join('');
+  $('tkBugun').innerHTML=bugunler.length?bugunler.map(kart).join(''):'<div class="empty">Bugün için hatırlatma yok</div>';
+  $('tkGelecek').innerHTML=gelecek.length?gelecek.map(kart).join(''):'<div class="empty">Gelecek hatırlatma yok</div>';
+}
+async function takipEkle(){
+  const ac=$('tkAcente').value.trim();const tr=$('tkTarih').value;
+  if(!ac||!tr){alert('Acente ve tarih gerekli');return;}
+  try{await api('takip_ekle',{payload:{acente:ac,hatirlatma_tarihi:tr,not_metni:$('tkNot').value.trim()}});renderTakip();}
+  catch(e){alert(e.error||'Hata')}
+}
+async function takipTamamla(id){try{await api('takip_tamamla',{payload:{id}});renderTakip();}catch(e){alert(e.error||'Hata')}}
+async function takipSil(id){if(!confirm('Bu takibi silmek istiyor musunuz?'))return;try{await api('takip_sil',{payload:{id}});renderTakip();}catch(e){alert(e.error||'Hata')}}
+
+// ===== 📜 DENETİM KAYITLARI (admin) =====
+async function renderKayitlar(){
+  $('view').innerHTML='<div class="loading">Kayıtlar yükleniyor...</div>';
+  let d;try{d=await api('log_list',{payload:{limit:200}});}catch(e){$('view').innerHTML='<div class="empty">Hata: '+(e.error||'')+'</div>';return;}
+  const loglar=d.loglar||[];
+  const islemRenk={ekle:'#0a7d32',guncelle:'#2563eb',sil:'#C8102E',kio_esle:'#9333ea',takip:'#a16207',hedef:'#185FA5'};
+  const islemAd={ekle:'Ekledi',guncelle:'Düzenledi',sil:'Sildi',kio_esle:'KİO eşledi',takip:'Takip ekledi',hedef:'Hedef'};
+  $('view').innerHTML=`
+    <div class="formcard"><h2>📜 Denetim Kayıtları</h2>
+      <p style="font-size:13px;color:var(--muted)">Son ${loglar.length} işlem. Kim, ne zaman, ne yaptı.</p></div>
+    <div class="panel" style="margin-top:14px"><div id="logList" style="max-height:600px;overflow:auto"></div></div>`;
+  $('logList').innerHTML=loglar.length?loglar.map(l=>{
+    const renk=islemRenk[l.islem]||'#71717a';
+    const t=new Date(l.created_at).toLocaleString('tr-TR');
+    return '<div class="rec" style="padding:10px 16px;display:flex;align-items:center;gap:10px">'+
+      '<span class="tag" style="background:'+renk+';color:#fff;min-width:90px;text-align:center">'+(islemAd[l.islem]||l.islem)+'</span>'+
+      '<div style="flex:1"><div style="font-size:13px">'+esc(l.detay||'')+'</div>'+
+      '<div class="kisi">'+esc(l.uw_ad||l.uw_id||'')+' · '+t+'</div></div></div>';
+  }).join(''):'<div class="empty">Henüz kayıt yok</div>';
+}
+
+// ===== 🕓 ACENTE GEÇMİŞİ (modal) =====
+async function acenteGecmis(ad){
+  let d;try{d=await api('acente_gecmis',{payload:{acente:ad}});}catch(e){alert(e.error||'Hata');return;}
+  const g=d.gorusmeler||[];
+  let m=document.getElementById('gecmisModal');
+  if(!m){m=document.createElement('div');m.id='gecmisModal';document.body.appendChild(m);}
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  const toplamPrim=g.filter(x=>x.durum==='Poliçe Bağlandı').reduce((s,x)=>s+(Number(x.prim)||0),0);
+  m.innerHTML=`<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:80vh;overflow:auto;padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div><div style="font-size:17px;font-weight:800">${esc(ad)}</div><div style="font-size:13px;color:var(--muted)">${g.length} görüşme${toplamPrim?' · ₺'+toplamPrim.toLocaleString('tr-TR')+' prim':''}</div></div>
+      <button onclick="document.getElementById('gecmisModal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+    <div style="position:relative;padding-left:18px">
+      ${g.map(x=>{
+        const dRenk=DURUM_RENK[x.durum]||'#71717a';
+        return `<div style="position:relative;padding:0 0 16px 14px;border-left:2px solid var(--line)">
+          <div style="position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:${dRenk};border:2px solid #fff"></div>
+          <div style="font-size:12px;color:var(--muted)">${esc(x.tarih||'')} · ${esc(x.uw_ad||'')}${x.kio_mu?' · <span style="color:#0a7d32">KİO ✓</span>':''}</div>
+          <div style="font-size:14px;font-weight:600;margin:2px 0">${esc(x.konu||'')} <span class="tag" style="background:${dRenk};color:#fff;font-size:10px">${esc(x.durum||'')}</span></div>
+          ${x.sonuc?'<div style="font-size:13px;color:#444">'+esc(x.sonuc)+'</div>':''}
+        </div>`;}).join('')||'<div class="empty">Görüşme yok</div>'}
+    </div>
+  </div>`;
+  m.onclick=(e)=>{if(e.target===m)m.remove();};
 }
 
 async function renderHedef(){
