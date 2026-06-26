@@ -46,6 +46,10 @@ module.exports = async (req, res) => {
   const { action, password, uw_id, payload } = body || {};
 
   try {
+    // --- VERSİYON (deploy kontrolü, şifresiz) ---
+    if (action === 'versiyon') {
+      return res.json({ surum: 'ADAY-KIO-2026-06-26', takip: true, aday: true });
+    }
     // --- LOGIN ---
     if (action === 'login') {
       if (password !== APP_PASSWORD) return res.status(401).json({ error: 'Şifre hatalı' });
