@@ -23,6 +23,17 @@ async function sb(path, opts = {}) {
   return data;
 }
 
+// Denetim kaydı yaz (hata olsa bile akışı bozma)
+async function logKaydet(uwId, uwAd, islem, detay, kayitId) {
+  try {
+    await sb('acente_log', {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: JSON.stringify({ uw_id: uwId || null, uw_ad: uwAd || null, islem, detay: detay || null, kayit_id: kayitId || null })
+    });
+  } catch (e) { /* log hatası sessiz geçilir */ }
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -48,10 +59,11 @@ module.exports = async (req, res) => {
     if (password !== APP_PASSWORD) return res.status(401).json({ error: 'Yetkisiz' });
 
     // kullanıcının rolünü doğrula
-    const meRows = await sb(`acente_uw?id=eq.${encodeURIComponent(uw_id)}&select=id,rol,aktif`);
+    const meRows = await sb(`acente_uw?id=eq.${encodeURIComponent(uw_id)}&select=id,ad,rol,aktif`);
     const me = meRows[0];
     if (!me || !me.aktif) return res.status(403).json({ error: 'Geçersiz kullanıcı' });
     const isAdmin = me.rol === 'admin';
+    const meAd = me.ad || uw_id;
 
     // --- KULLANICI LİSTESİ ---
     if (action === 'users') {
@@ -262,6 +274,7 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         secili_kio_kod: p.secili_kio_kod || null
       };
       const out = await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(rec) });
+      await logKaydet(uw_id, meAd, 'ekle', `${rec.acente}${rec.kisi ? ' / ' + rec.kisi : ''}`, out[0] && out[0].id);
       return res.json({ ok: true, row: out[0] });
     }
 
@@ -282,6 +295,7 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         secili_kio_kod: p.secili_kio_kod || null
       };
       const out = await sb(`acente_gorusmeler?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(upd) });
+      await logKaydet(uw_id, meAd, 'guncelle', `${upd.acente}`, id);
       return res.json({ ok: true, row: out[0] });
     }
 
@@ -292,7 +306,9 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
       const owner = await sb(`acente_gorusmeler?id=eq.${id}&select=uw_id`);
       if (!owner[0]) return res.status(404).json({ error: 'Kayıt yok' });
       if (owner[0].uw_id !== uw_id && !isAdmin) return res.status(403).json({ error: 'Sadece kendi kaydınızı silebilirsiniz' });
+      const silinen = await sb(`acente_gorusmeler?id=eq.${id}&select=acente`);
       await sb(`acente_gorusmeler?id=eq.${id}`, { method: 'DELETE', prefer: 'return=minimal' });
+      await logKaydet(uw_id, meAd, 'sil', silinen[0] ? silinen[0].acente : id, id);
       return res.json({ ok: true });
     }
 
@@ -315,6 +331,115 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
       if (!recs.length) return res.json({ ok: true, added: 0 });
       await sb('acente_gorusmeler', { method: 'POST', body: JSON.stringify(recs), prefer: 'return=minimal' });
       return res.json({ ok: true, added: recs.length, hedef: hedefUw });
+    }
+
+    // === TAKİP HATIRLATMALARI ===
+    // ekle
+    if (action === 'takip_ekle') {
+      const p = payload || {};
+      if (!p.acente || !p.hatirlatma_tarihi) return res.status(400).json({ error: 'Acente ve tarih gerekli' });
+      const rec = {
+        uw_id, gorusme_id: p.gorusme_id || null, acente: p.acente,
+        hatirlatma_tarihi: p.hatirlatma_tarihi, not_metni: p.not_metni || null
+      };
+      const out = await sb('acente_takip', { method: 'POST', body: JSON.stringify(rec) });
+      await logKaydet(uw_id, meAd, 'takip', `${p.acente} → ${p.hatirlatma_tarihi}`, out[0] && out[0].id);
+      return res.json({ ok: true, row: out[0] });
+    }
+    // listele (kendi takipleri; admin hepsini görebilir)
+    if (action === 'takip_list') {
+      const p = payload || {};
+      const hepsi = isAdmin && p.hepsi === true;
+      const filtre = hepsi ? '' : `&uw_id=eq.${encodeURIComponent(uw_id)}`;
+      const aktifFiltre = p.tamamlanan === true ? '' : '&tamamlandi=eq.false';
+      const rows = await sb(`acente_takip?select=*,acente_uw(ad)&order=hatirlatma_tarihi.asc${filtre}${aktifFiltre}`);
+      return res.json({ takipler: rows.map(r => ({ ...r, uw_ad: r.acente_uw ? r.acente_uw.ad : r.uw_id })) });
+    }
+    // tamamla / sil
+    if (action === 'takip_tamamla') {
+      const p = payload || {};
+      if (!p.id) return res.status(400).json({ error: 'id gerekli' });
+      const own = await sb(`acente_takip?id=eq.${p.id}&select=uw_id`);
+      if (!own[0]) return res.status(404).json({ error: 'Takip yok' });
+      if (own[0].uw_id !== uw_id && !isAdmin) return res.status(403).json({ error: 'Yetkisiz' });
+      await sb(`acente_takip?id=eq.${p.id}`, { method: 'PATCH', body: JSON.stringify({ tamamlandi: true }), prefer: 'return=minimal' });
+      return res.json({ ok: true });
+    }
+    if (action === 'takip_sil') {
+      const p = payload || {};
+      if (!p.id) return res.status(400).json({ error: 'id gerekli' });
+      const own = await sb(`acente_takip?id=eq.${p.id}&select=uw_id`);
+      if (!own[0]) return res.status(404).json({ error: 'Takip yok' });
+      if (own[0].uw_id !== uw_id && !isAdmin) return res.status(403).json({ error: 'Yetkisiz' });
+      await sb(`acente_takip?id=eq.${p.id}`, { method: 'DELETE', prefer: 'return=minimal' });
+      return res.json({ ok: true });
+    }
+
+    // === DENETİM KAYDI (sadece admin) ===
+    if (action === 'log_list') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const limit = Math.min(((payload || {}).limit) || 100, 300);
+      const rows = await sb(`acente_log?select=*&order=created_at.desc&limit=${limit}`);
+      return res.json({ loglar: rows });
+    }
+
+    // === MANUEL KİO EŞLEŞTİRME (sadece admin) ===
+    // eşleşmeyen görüşmeleri getir
+    if (action === 'eslesmeyenler') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const rows = await sb('acente_gorusmeler_kio?select=id,acente,kisi,bolge,tarih,uw_id,secili_kio_kod&kio_kod=is.null&order=tarih.desc');
+      return res.json({ kayitlar: rows });
+    }
+    // bir görüşmeyi elle bir KİO koduna bağla (veya "KİO değil" işaretle)
+    if (action === 'kio_esle') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const p = payload || {};
+      if (!p.id) return res.status(400).json({ error: 'id gerekli' });
+      const kod = p.kio_kod || null; // null = eşleştirmeyi kaldır
+      await sb(`acente_gorusmeler?id=eq.${p.id}`, { method: 'PATCH', body: JSON.stringify({ secili_kio_kod: kod }), prefer: 'return=minimal' });
+      await logKaydet(uw_id, meAd, 'kio_esle', `${p.acente_ad || p.id} → ${kod || 'temizlendi'}`, p.id);
+      return res.json({ ok: true });
+    }
+    // tüm KİO listesi (manuel eşleştirme arama kutusu için)
+    if (action === 'kio_hepsi') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const list = await sb('acente_kio?select=kod,ad,il,sompo_bolge&order=ad.asc');
+      return res.json({ kio: list });
+    }
+
+    // === ACENTE GEÇMİŞİ ===
+    if (action === 'acente_gecmis') {
+      const p = payload || {};
+      const ad = (p.acente || '').trim();
+      if (!ad) return res.status(400).json({ error: 'acente gerekli' });
+      // aynı acente adına ait tüm görüşmeler (UW sadece kendi, admin hepsi)
+      const filtre = isAdmin ? '' : `&uw_id=eq.${encodeURIComponent(uw_id)}`;
+      const rows = await sb(`acente_gorusmeler_kio?select=*,acente_uw(ad)&acente=eq.${encodeURIComponent(ad)}${filtre}&order=tarih.desc`);
+      return res.json({ gorusmeler: rows.map(r => ({ ...r, uw_ad: r.acente_uw ? r.acente_uw.ad : r.uw_id })) });
+    }
+
+    // === TREND & LİDERLİK (admin) ===
+    if (action === 'trend') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const rows = await sb('acente_gorusmeler_kio?select=uw_id,ay,yil,tur,durum,prim,kio_mu,acente_uw(ad)&order=tarih.asc');
+      // aylık toplam
+      const aylik = {};
+      const uwStat = {};
+      rows.forEach(r => {
+        const ay = `${r.yil}-${String(r.ay).padStart(2, '0')}`;
+        if (r.ay && r.yil) aylik[ay] = (aylik[ay] || 0) + 1;
+        const uw = r.acente_uw ? r.acente_uw.ad : r.uw_id;
+        if (!uwStat[uw]) uwStat[uw] = { gorusme: 0, kio: 0, teklif: 0, police: 0, prim: 0 };
+        uwStat[uw].gorusme++;
+        if (r.kio_mu) uwStat[uw].kio++;
+        if (['Teklif Verildi', 'RT Yapıldı', 'Poliçe Bağlandı', 'Kaybedildi'].includes(r.durum)) uwStat[uw].teklif++;
+        if (r.durum === 'Poliçe Bağlandı') { uwStat[uw].police++; uwStat[uw].prim += Number(r.prim) || 0; }
+      });
+      const liderlik = Object.entries(uwStat).map(([ad, s]) => ({
+        ad, ...s,
+        donusum: s.teklif ? Math.round(s.police / s.teklif * 100) : 0
+      })).sort((a, b) => b.gorusme - a.gorusme);
+      return res.json({ aylik, liderlik });
     }
 
     return res.status(400).json({ error: 'Bilinmeyen aksiyon' });
