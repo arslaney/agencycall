@@ -153,7 +153,7 @@ function esc(s){return(s||'').toString().replace(/[&<>]/g,c=>({'&':'&amp;','<':'
 function uniq(a){return[...new Set(a.filter(Boolean))].sort()}
 function ayNo(t){const m=/^(\d{4})-(\d{2})/.exec(t||'');return m?parseInt(m[2],10):0}
 function norm(s){return(s||'').toString().trim()}
-function pick(row,keys){for(const k of keys){for(const rk in row){if(rk.trim().toUpperCase()===k.toUpperCase())return row[rk]}}return''}
+function pick(row,keys){const nk=s=>(''+s).trim().toUpperCase().replace(/[_\s]+/g,' ');for(const k of keys){const kk=nk(k);for(const rk in row){if(nk(rk)===kk)return row[rk]}}return''}
 
 async function api(action, extra={}){
   const res=await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -918,16 +918,34 @@ function kioRevizeOku(cb){
     try{
       const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
-      const KMAP={kod:['KOD','KİO KODU','KIO KODU'],ad:['AD','ACENTE','ACENTE ADI','KİO','UNVAN'],il:['İL','IL','ŞEHİR','SEHIR'],bolge:['BÖLGE','BOLGE','SOMPO BÖLGE','SOMPO BOLGE'],kac_brans:['KAÇ BRANŞ','KAC BRANS','BRANŞ SAYISI'],hangi_brans:['HANGİ BRANŞ','HANGI BRANS','BRANŞLAR','BRANSLAR']};
-      const items=rows.map(row=>({
-        kod:(''+pick(row,KMAP.kod)).trim(),
-        ad:(''+pick(row,KMAP.ad)).trim(),
-        il:(''+pick(row,KMAP.il)).trim(),
-        sompo_bolge:(''+pick(row,KMAP.bolge)).trim(),
-        kac_brans:pick(row,KMAP.kac_brans),
-        hangi_brans:(''+pick(row,KMAP.hangi_brans)).trim()
-      })).filter(r=>r.kod||r.ad);
-      if(!items.length){alert('Excel boş veya KOD/AD sütunu bulunamadı. Başlıkları kontrol et.');return;}
+      const KMAP={
+        kod:['KOD','KİO KODU','KIO KODU','PARTAJ','KANAL KODU'],
+        ad:['AD','ACENTE','ACENTE ADI','ACENTE_ADI','KİO','UNVAN','ÜNVAN'],
+        kanal:['KANAL KISA ADI','KANAL KISA ADİ','KANAL ADI'], // birleşik: "410110 - EKSPRES NET SİGORTA"
+        il:['İL','IL','ŞEHİR','SEHIR'],
+        bolge:['BÖLGE','BOLGE','SOMPO BÖLGE','SOMPO BOLGE'],
+        kac_brans:['KAÇ BRANŞ','KAC BRANS','BRANŞ SAYISI'],
+        hangi_brans:['HANGİ BRANŞ','HANGI BRANS','BRANŞLAR','BRANSLAR']
+      };
+      const items=rows.map(row=>{
+        let kod=(''+pick(row,KMAP.kod)).trim();
+        let ad=(''+pick(row,KMAP.ad)).trim();
+        // "KANAL KISA ADI" gibi birleşik hücre: "410110 - EKSPRES NET SİGORTA"
+        const kanal=(''+pick(row,KMAP.kanal)).trim();
+        if(kanal && (!kod || !ad)){
+          const m=kanal.match(/^\s*(\d{4,})\s*[-–—]\s*(.+)$/);
+          if(m){ if(!kod)kod=m[1].trim(); if(!ad)ad=m[2].trim(); }
+          else if(!ad){ ad=kanal; }
+        }
+        return {
+          kod, ad,
+          il:(''+pick(row,KMAP.il)).trim(),
+          sompo_bolge:(''+pick(row,KMAP.bolge)).trim(),
+          kac_brans:pick(row,KMAP.kac_brans),
+          hangi_brans:(''+pick(row,KMAP.hangi_brans)).trim()
+        };
+      }).filter(r=>r.kod||r.ad);
+      if(!items.length){alert('Excel\'de tanınan sütun bulunamadı.\n\nDesteklenen başlıklar:\n• KOD / PARTAJ / KANAL KODU\n• AD / ACENTE_ADI / KANAL KISA ADI\n• BÖLGE\n\nİlk satırın başlık satırı olduğundan emin ol.');return;}
       cb(items);
     }catch(e){alert('Excel okunamadı: '+e.message);}
   };
