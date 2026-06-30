@@ -192,7 +192,7 @@ async function enterApp(){
 }
 function buildTabs(){
   let tabs;
-  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['eslestir','🔗 KİO Eşleştir'],['trend','📈 Trend & Liderlik'],['hedef','🏆 Hedefler'],['kayitlar','📜 Kayıtlar'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
+  if(CUR.rol==='admin')tabs=[['benim','📋 Görüşmelerim'],['ekle','➕ Görüşme Ekle'],['ozet','📊 Genel Bakış'],['kio','🎯 KİO Takip'],['eslestir','🔗 KİO Eşleştir'],['kiorevize','🔄 KİO Revizyon'],['trend','📈 Trend & Liderlik'],['hedef','🏆 Hedefler'],['kayitlar','📜 Kayıtlar'],['uwkarsi','👥 UW Karşılaştırma'],['yukle','📁 Excel Yükle'],['rapor','📤 Rapor']];
   else tabs=[['benim','📋 Görüşmelerim'],['panelim','📊 Panelim'],['ekle','➕ Görüşme Ekle'],['yukle','📁 Excel Yükle']];
   $('tabs').innerHTML=tabs.map((t,i)=>'<div class="tab'+(i===0?' on':'')+'" data-v="'+t[0]+'">'+t[1]+'</div>').join('');
   qa('.tab').forEach(el=>el.onclick=()=>{qa('.tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');showView(el.dataset.v)});
@@ -207,6 +207,7 @@ async function showView(v){
     else if(v==='kio'){await renderKioTakip();}
     else if(v==='panelim'){await renderPanelim();}
     else if(v==='eslestir'){await renderEslestir();}
+    else if(v==='kiorevize'){renderKioRevize();}
     else if(v==='trend'){await renderTrend();}
     else if(v==='kayitlar'){await renderKayitlar();}
     else if(v==='hedef'){await renderHedef();}
@@ -886,6 +887,119 @@ function findIlValue(ad){
 
 // ===== 🔗 MANUEL KİO EŞLEŞTİRME (admin) =====
 let _KIOHEPSI=[];
+// ===== 🔄 KİO LİSTESİ REVİZYONU (admin) =====
+let _KIO_REVIZE_ITEMS=null;
+function renderKioRevize(){
+  $('view').innerHTML=`
+    <div class="formcard">
+      <h2>🔄 KİO Listesi Revizyonu</h2>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6">Güncel KİO listesini Excel olarak yükle. Sistem mevcut listeyle karşılaştırır: <b style="color:#0a7d32">yeni girenler</b> eklenir, <b style="color:var(--red)">çıkanlar</b> "eski KİO" olarak pasifleştirilir (geçmiş görüşmeler korunur). Önce önizleme görürsün, onaylayınca uygulanır.</p>
+      <div style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0;font-size:12px;color:var(--muted)">
+        <b>Excel sütun başlıkları:</b> KOD, AD (veya ACENTE), İL, BÖLGE (sompo bölge), KAÇ BRANŞ, HANGİ BRANŞ. Eşleştirme önce KOD'a, kod yoksa AD'a göre yapılır.
+      </div>
+      <input type="file" id="kioFile" accept=".xlsx,.xls" style="margin:8px 0">
+      <button class="save" onclick="kioRevizeOnizle()" id="kioOnizleBtn">🔍 Önizle (ne değişecek?)</button>
+      <span id="kioRevMsg" style="margin-left:12px;font-size:13px;color:var(--muted)"></span>
+    </div>
+    <div id="kioRevizeSonuc"></div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel"><h2>📜 Revizyon Geçmişi</h2><div id="kioLogList" style="max-height:380px;overflow:auto"></div></div>
+      <div class="panel"><h2>🗂️ Eski (Pasif) KİO'lar</h2><div id="kioEskiList" style="max-height:380px;overflow:auto"></div></div>
+    </div>`;
+  kioLogYukle();
+  kioEskiYukle();
+}
+
+function kioRevizeOku(cb){
+  const file=$('kioFile').files[0];
+  if(!file){alert('Önce Excel dosyası seç');return;}
+  const rd=new FileReader();
+  rd.onload=(ev)=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      const KMAP={kod:['KOD','KİO KODU','KIO KODU'],ad:['AD','ACENTE','ACENTE ADI','KİO','UNVAN'],il:['İL','IL','ŞEHİR','SEHIR'],bolge:['BÖLGE','BOLGE','SOMPO BÖLGE','SOMPO BOLGE'],kac_brans:['KAÇ BRANŞ','KAC BRANS','BRANŞ SAYISI'],hangi_brans:['HANGİ BRANŞ','HANGI BRANS','BRANŞLAR','BRANSLAR']};
+      const items=rows.map(row=>({
+        kod:(''+pick(row,KMAP.kod)).trim(),
+        ad:(''+pick(row,KMAP.ad)).trim(),
+        il:(''+pick(row,KMAP.il)).trim(),
+        sompo_bolge:(''+pick(row,KMAP.bolge)).trim(),
+        kac_brans:pick(row,KMAP.kac_brans),
+        hangi_brans:(''+pick(row,KMAP.hangi_brans)).trim()
+      })).filter(r=>r.kod||r.ad);
+      if(!items.length){alert('Excel boş veya KOD/AD sütunu bulunamadı. Başlıkları kontrol et.');return;}
+      cb(items);
+    }catch(e){alert('Excel okunamadı: '+e.message);}
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+async function kioRevizeOnizle(){
+  kioRevizeOku(async(items)=>{
+    _KIO_REVIZE_ITEMS=items;
+    $('kioRevMsg').textContent='Karşılaştırılıyor...';
+    let d;try{d=await api('kio_revize',{payload:{mode:'onizle',items}});}catch(e){$('kioRevMsg').textContent='';alert(e.error||'Hata');return;}
+    $('kioRevMsg').textContent='';
+    const o=d.ozet||{};
+    const liste=(baslik,renk,arr,fmt)=>arr&&arr.length?`<div class="panel" style="margin-bottom:12px"><h2 style="color:${renk}">${baslik} (${arr.length})</h2><div style="max-height:240px;overflow:auto">${arr.map(fmt).join('')}</div></div>`:'';
+    $('kioRevizeSonuc').innerHTML=`
+      <div class="kpis" style="margin-bottom:14px">
+        <div class="kpi"><div class="v">${o.gelen_satir||0}</div><div class="l">Excel Satırı</div></div>
+        <div class="kpi"><div class="v" style="color:#0a7d32">${o.yeni||0}</div><div class="l">🆕 Yeni Giren</div></div>
+        <div class="kpi"><div class="v" style="color:var(--red)">${o.cikan||0}</div><div class="l">❌ Çıkan</div></div>
+        <div class="kpi"><div class="v" style="color:#2563eb">${o.guncellenen||0}</div><div class="l">✏️ Güncellenen</div></div>
+        <div class="kpi"><div class="v" style="color:#a16207">${o.geri_donen||0}</div><div class="l">↩️ Geri Dönen</div></div>
+        <div class="kpi"><div class="v">${o.degismeyen||0}</div><div class="l">= Değişmeyen</div></div>
+      </div>
+      <div style="background:#fff8e7;border:1px solid #f3d391;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;font-size:13px;color:#a16207"><b>Bunlar henüz uygulanmadı.</b> Aşağıdaki değişiklikleri kontrol et, doğruysa "Onayla ve Uygula"ya bas. Çıkan KİO'lar silinmez, "eski KİO" olarak işaretlenir.</div>
+        <button class="save" style="margin:0;background:var(--green)" onclick="kioRevizeUygula()">✅ Onayla ve Uygula</button>
+      </div>
+      ${liste('🆕 Yeni Giren KİO','#0a7d32',d.yeniler,y=>'<div class="rec" style="padding:8px 16px"><div class="acente" style="font-size:13px">'+esc(y.ad)+'</div><div class="kisi">'+esc(y.kod||'')+' · '+esc(y.il||'')+' · '+esc(y.bolge||'')+'</div></div>')}
+      ${liste('❌ Çıkan (Eski KİO Olacak)','#C8102E',d.cikanlar,c=>'<div class="rec" style="padding:8px 16px"><div class="acente" style="font-size:13px">'+esc(c.ad)+'</div><div class="kisi">'+esc(c.kod||'')+' · '+esc(c.il||'')+' · '+esc(c.bolge||'')+'</div></div>')}
+      ${liste('↩️ Geri Dönen (Eskiden Çıkmıştı)','#a16207',d.geri_donenler,r=>'<div class="rec" style="padding:8px 16px"><div class="acente" style="font-size:13px">'+esc(r.ad)+'</div><div class="kisi">'+esc(r.kod||'')+'</div></div>')}
+      ${liste('✏️ Bilgisi Güncellenecek','#2563eb',d.guncellenenler,u=>'<div class="rec" style="padding:8px 16px"><div class="acente" style="font-size:13px">'+esc(u.ad)+'</div><div class="kisi">'+esc(u.kod||'')+' · bölge: '+esc(u.eski_bolge||'—')+' → '+esc(u.yeni_bolge||'—')+'</div></div>')}
+    `;
+    $('kioRevizeSonuc').scrollIntoView({behavior:'smooth',block:'start'});
+  });
+}
+
+async function kioRevizeUygula(){
+  if(!_KIO_REVIZE_ITEMS){alert('Önce önizleme yap');return;}
+  if(!confirm('KİO listesi güncellenecek. Çıkanlar "eski KİO" olarak işaretlenecek (silinmez). Onaylıyor musun?'))return;
+  let d;try{d=await api('kio_revize',{payload:{mode:'uygula',items:_KIO_REVIZE_ITEMS}});}catch(e){alert(e.error||'Hata');return;}
+  const o=d.ozet||{};
+  $('kioRevizeSonuc').innerHTML='<div class="panel"><div style="padding:24px;text-align:center"><div style="font-size:40px">✅</div><div style="font-size:16px;font-weight:800;margin:8px 0">Revizyon uygulandı</div><div style="font-size:13px;color:var(--muted)">'+(o.yeni||0)+' yeni giriş · '+(o.cikan||0)+' çıkış · '+(o.guncellenen||0)+' güncelleme · '+(o.geri_donen||0)+' geri dönen</div></div></div>';
+  _KIO_REVIZE_ITEMS=null;
+  _KIOHEPSI=[]; // eşleştirme önbelleğini sıfırla
+  kioLogYukle();kioEskiYukle();
+}
+
+async function kioLogYukle(){
+  const box=$('kioLogList');if(!box)return;
+  let d;try{d=await api('kio_log',{payload:{limit:200}});}catch(e){box.innerHTML='<div class="empty" style="padding:16px">Yüklenemedi</div>';return;}
+  const loglar=d.loglar||[];
+  const renk={giris:'#0a7d32',cikis:'#C8102E',guncelle:'#2563eb',geri_aktif:'#a16207'};
+  const ad={giris:'🆕 Girdi',cikis:'❌ Çıktı',guncelle:'✏️ Güncellendi',geri_aktif:'↩️ Geri Döndü'};
+  box.innerHTML=loglar.length?loglar.map(l=>{
+    const t=new Date(l.created_at).toLocaleString('tr-TR');
+    return '<div class="rec" style="padding:9px 16px;display:flex;align-items:center;gap:9px">'+
+      '<span class="tag" style="background:'+(renk[l.islem]||'#71717a')+';color:#fff;min-width:90px;text-align:center;font-size:11px">'+(ad[l.islem]||l.islem)+'</span>'+
+      '<div style="flex:1"><div style="font-size:13px">'+esc(l.ad||l.kod||'')+'</div>'+
+      '<div class="kisi">'+esc(l.sompo_bolge||'')+' · '+t+(l.uw_ad?' · '+esc(l.uw_ad):'')+'</div></div></div>';
+  }).join(''):'<div class="empty" style="padding:16px">Henüz revizyon yapılmadı</div>';
+}
+
+async function kioEskiYukle(){
+  const box=$('kioEskiList');if(!box)return;
+  let d;try{d=await api('kio_eski');}catch(e){box.innerHTML='<div class="empty" style="padding:16px">Yüklenemedi</div>';return;}
+  const eski=d.eski||[];
+  box.innerHTML=eski.length?eski.map(k=>
+    '<div class="rec" style="padding:9px 16px"><div class="acente" style="font-size:13px;color:var(--muted)">'+esc(k.ad)+' <span class="tag" style="background:#71717a;color:#fff;font-size:10px">eski</span></div>'+
+    '<div class="kisi">'+esc(k.kod||'')+' · '+esc(k.il||'')+' · '+esc(k.sompo_bolge||'')+(k.cikis_tarihi?' · çıkış: '+esc(k.cikis_tarihi):'')+'</div></div>'
+  ).join(''):'<div class="empty" style="padding:16px">Pasif KİO yok — liste güncel 🎉</div>';
+}
+
 async function renderEslestir(){
   $('view').innerHTML='<div class="loading">Eşleşmeyen kayıtlar yükleniyor...</div>';
   let data,kioList;
