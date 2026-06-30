@@ -101,8 +101,8 @@ module.exports = async (req, res) => {
       const now = new Date();
       const buYil = (payload && payload.yil) || now.getFullYear();
       const buAy = (payload && payload.ay) || (now.getMonth() + 1);
-      // tüm KİO acenteleri
-      const kio = await sb('acente_kio?select=kod,ad,il,sompo_bolge,hangi_brans,kac_brans&order=ad.asc');
+      // tüm AKTİF KİO acenteleri (eski/pasif KİO'lar hedef sayılmaz)
+      const kio = await sb('acente_kio?select=kod,ad,il,sompo_bolge,hangi_brans,kac_brans&aktif=eq.true&order=ad.asc');
       // hangi KİO kodları görüşülmüş (view üzerinden) — tarih ile
       const gor = await sb('acente_gorusmeler_kio?select=kio_kod,tarih,ay,yil,uw_id&kio_kod=not.is.null');
       const arananKod = {};      // yıl başından bugüne (bu yıl)
@@ -176,7 +176,7 @@ module.exports = async (req, res) => {
     // --- BÖLGEYE GÖRE KİO ACENTELERİ (form açılır liste için) ---
     if (action === 'kio_bolge') {
       const bolge = (payload || {}).bolge || '';
-      let q = 'acente_kio?select=kod,ad,il,sompo_bolge,hangi_brans&order=ad.asc';
+      let q = 'acente_kio?select=kod,ad,il,sompo_bolge,hangi_brans&aktif=eq.true&order=ad.asc';
       if (bolge) q += `&sompo_bolge=eq.${encodeURIComponent(bolge)}`;
       const list = await sb(q);
       return res.json({ kio: list });
@@ -232,7 +232,7 @@ module.exports = async (req, res) => {
       if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY tanımlı değil' });
       // veriyi topla
       const rows = await sb('acente_gorusmeler_kio?select=uw_id,tarih,ay,bolge,acente,tur,durum,prim,kio_mu,acente_uw(ad)&order=tarih.desc&limit=500');
-      const kioAll = await sb('acente_kio?select=kod');
+      const kioAll = await sb('acente_kio?select=kod&aktif=eq.true');
       // özet istatistik çıkar (token tasarrufu için ham değil özet gönderiyoruz)
       const stat = { toplam: rows.length, uw: {}, ay: {}, bolge: {}, durum: {}, kio: 0, dis: 0, prim: 0, acente: {} };
       rows.forEach(r => {
@@ -568,7 +568,7 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
       let bolgeKio = [];
       if (benimBolgeler.length) {
         const inList = benimBolgeler.map(b => `"${b}"`).join(',');
-        bolgeKio = await sb(`acente_kio?select=kod,ad,il,sompo_bolge&sompo_bolge=in.(${inList})&order=ad.asc`);
+        bolgeKio = await sb(`acente_kio?select=kod,ad,il,sompo_bolge&aktif=eq.true&sompo_bolge=in.(${inList})&order=ad.asc`);
       }
       // ekip geneli bu yıl aranan KİO kodları (benim bölgemdeki bir KİO başkası aramışsa da "arandı" say)
       const ekipArananRows = await sb(`acente_gorusmeler_kio?select=kio_kod&kio_mu=eq.true&yil=eq.${yil}`);
@@ -609,6 +609,166 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
         liderlik, benimSira, toplamUw: liderlik.length,
         hedef, hedefGerceklesen: ayStat.gorusme
       });
+    }
+
+    // === KİO LİSTESİ REVİZYONU (sadece admin) ===
+    // Excel'den gelen güncel KİO listesini mevcutla karşılaştırır.
+    // mode: 'onizle' → sadece ne değişeceğini döndür (yazma yok)
+    // mode: 'uygula' → değişiklikleri uygula + logla
+    if (action === 'kio_revize') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin yapabilir' });
+      const pl = payload || {};
+      const mode = pl.mode === 'uygula' ? 'uygula' : 'onizle';
+      const gelenHam = pl.items || [];
+
+      // JS tarafında normalize (DB acente_normalize ile uyumlu)
+      const norm = (s) => {
+        let x = (s || '').toString().toLocaleUpperCase('tr-TR');
+        x = x.replace(/İ/g, 'I').replace(/I/g, 'I').replace(/Ş/g, 'S').replace(/Ğ/g, 'G').replace(/Ü/g, 'U').replace(/Ö/g, 'O').replace(/Ç/g, 'C');
+        x = x.replace(/\b(SIGORTA|ARACILIK|HIZMETLERI|HIZM|ACENTELIGI|ANONIM|SIRKETI|LTD|STI|LIMITED|TICARET|REASURANS|BROKERLIGI|ARA|AS)\b/g, ' ');
+        x = x.replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return x;
+      };
+
+      // Gelen Excel satırlarını temizle
+      const gelen = gelenHam
+        .map(r => ({
+          kod: (r.kod || '').toString().trim(),
+          ad: (r.ad || '').toString().trim(),
+          il: (r.il || '').toString().trim() || null,
+          sompo_bolge: (r.sompo_bolge || r.bolge || '').toString().trim() || null,
+          kac_brans: r.kac_brans != null && r.kac_brans !== '' ? parseInt(r.kac_brans, 10) : null,
+          hangi_brans: (r.hangi_brans || '').toString().trim() || null
+        }))
+        .filter(r => r.kod || r.ad); // en az kod veya ad olmalı
+      gelen.forEach(r => { r._adNorm = norm(r.ad); });
+
+      // Mevcut tüm KİO'lar (aktif + pasif)
+      const mevcut = await sb('acente_kio?select=kod,ad,il,sompo_bolge,kac_brans,hangi_brans,aktif');
+      const mevcutKodMap = {}; // kod → kayıt
+      const mevcutAdMap = {};  // adNorm → kayıt
+      mevcut.forEach(m => {
+        if (m.kod) mevcutKodMap[m.kod.trim()] = m;
+        const an = norm(m.ad);
+        if (an) mevcutAdMap[an] = m;
+      });
+
+      // Eşleştirme: önce kod, yoksa ad
+      const eslesenKodlar = new Set(); // gelen ile eşleşen mevcut kodlar
+      const yeniler = [];   // sistemde olmayan (giriş)
+      const guncellenenler = []; // eşleşti ama bilgisi değişti
+      const geriAktif = []; // pasifti, tekrar listede (geri dönen)
+
+      gelen.forEach(g => {
+        let m = null;
+        if (g.kod && mevcutKodMap[g.kod]) m = mevcutKodMap[g.kod];
+        else if (g._adNorm && mevcutAdMap[g._adNorm]) m = mevcutAdMap[g._adNorm];
+
+        if (m) {
+          eslesenKodlar.add(m.kod);
+          if (m.aktif === false) geriAktif.push({ gelen: g, mevcut: m });
+          // bilgi değişikliği var mı (il/bölge/branş/ad)
+          else if ((g.il && g.il !== m.il) || (g.sompo_bolge && g.sompo_bolge !== m.sompo_bolge) ||
+                   (g.ad && g.ad !== m.ad) || (g.hangi_brans && g.hangi_brans !== m.hangi_brans)) {
+            guncellenenler.push({ gelen: g, mevcut: m });
+          }
+        } else {
+          yeniler.push(g);
+        }
+      });
+
+      // Çıkanlar: şu an AKTİF olup gelen listede eşleşmeyenler
+      const cikanlar = mevcut.filter(m => m.aktif !== false && !eslesenKodlar.has(m.kod));
+
+      const ozet = {
+        gelen_satir: gelen.length,
+        yeni: yeniler.length,
+        cikan: cikanlar.length,
+        guncellenen: guncellenenler.length,
+        geri_donen: geriAktif.length,
+        degismeyen: gelen.length - yeniler.length - guncellenenler.length - geriAktif.length
+      };
+
+      // ÖNİZLEME: sadece ne olacağını döndür
+      if (mode === 'onizle') {
+        return res.json({
+          mode: 'onizle', ozet,
+          yeniler: yeniler.slice(0, 200).map(y => ({ kod: y.kod, ad: y.ad, il: y.il, bolge: y.sompo_bolge })),
+          cikanlar: cikanlar.slice(0, 200).map(c => ({ kod: c.kod, ad: c.ad, il: c.il, bolge: c.sompo_bolge })),
+          guncellenenler: guncellenenler.slice(0, 200).map(u => ({ kod: u.mevcut.kod, ad: u.gelen.ad, eski_bolge: u.mevcut.sompo_bolge, yeni_bolge: u.gelen.sompo_bolge })),
+          geri_donenler: geriAktif.slice(0, 200).map(r => ({ kod: r.mevcut.kod, ad: r.mevcut.ad }))
+        });
+      }
+
+      // UYGULA: değişiklikleri yaz + logla
+      const revizyonId = (globalThis.crypto && globalThis.crypto.randomUUID) ? globalThis.crypto.randomUUID() : null;
+      const bugun = new Date().toISOString().slice(0, 10);
+      const loglar = [];
+
+      // 1) Yeni KİO'lar ekle
+      for (const y of yeniler) {
+        // kod yoksa addan türet (benzersiz olması için ad_norm + sıra)
+        let kod = y.kod;
+        if (!kod) kod = 'YENI-' + (y._adNorm || y.ad).replace(/\s+/g, '').slice(0, 12) + '-' + Date.now().toString().slice(-5);
+        const yeniKayit = {
+          kod, ad: y.ad, ad_norm: y._adNorm || norm(y.ad),
+          il: y.il, sompo_bolge: y.sompo_bolge, kac_brans: y.kac_brans, hangi_brans: y.hangi_brans,
+          aktif: true, giris_tarihi: bugun
+        };
+        try {
+          await sb('acente_kio', { method: 'POST', body: JSON.stringify(yeniKayit), prefer: 'return=minimal,resolution=ignore-duplicates', headers: { Prefer: 'return=minimal,resolution=ignore-duplicates' } });
+          loglar.push({ kod, ad: y.ad, il: y.il, sompo_bolge: y.sompo_bolge, islem: 'giris', revizyon_id: revizyonId, uw_id, uw_ad: meAd });
+        } catch (e) { /* çakışma, atla */ }
+      }
+
+      // 2) Çıkanları pasifle (silme YOK)
+      for (const c of cikanlar) {
+        await sb(`acente_kio?kod=eq.${encodeURIComponent(c.kod)}`, { method: 'PATCH', body: JSON.stringify({ aktif: false, cikis_tarihi: bugun }), prefer: 'return=minimal' });
+        loglar.push({ kod: c.kod, ad: c.ad, il: c.il, sompo_bolge: c.sompo_bolge, islem: 'cikis', revizyon_id: revizyonId, uw_id, uw_ad: meAd });
+      }
+
+      // 3) Geri dönenleri tekrar aktif et
+      for (const r of geriAktif) {
+        await sb(`acente_kio?kod=eq.${encodeURIComponent(r.mevcut.kod)}`, { method: 'PATCH', body: JSON.stringify({ aktif: true, cikis_tarihi: null, giris_tarihi: bugun }), prefer: 'return=minimal' });
+        loglar.push({ kod: r.mevcut.kod, ad: r.mevcut.ad, il: r.mevcut.il, sompo_bolge: r.mevcut.sompo_bolge, islem: 'geri_aktif', revizyon_id: revizyonId, uw_id, uw_ad: meAd });
+      }
+
+      // 4) Bilgisi değişenleri güncelle
+      for (const u of guncellenenler) {
+        const upd = {};
+        if (u.gelen.ad) { upd.ad = u.gelen.ad; upd.ad_norm = u.gelen._adNorm; }
+        if (u.gelen.il) upd.il = u.gelen.il;
+        if (u.gelen.sompo_bolge) upd.sompo_bolge = u.gelen.sompo_bolge;
+        if (u.gelen.hangi_brans) upd.hangi_brans = u.gelen.hangi_brans;
+        if (u.gelen.kac_brans != null) upd.kac_brans = u.gelen.kac_brans;
+        if (Object.keys(upd).length) {
+          await sb(`acente_kio?kod=eq.${encodeURIComponent(u.mevcut.kod)}`, { method: 'PATCH', body: JSON.stringify(upd), prefer: 'return=minimal' });
+          loglar.push({ kod: u.mevcut.kod, ad: u.gelen.ad, il: u.gelen.il, sompo_bolge: u.gelen.sompo_bolge, islem: 'guncelle', revizyon_id: revizyonId, uw_id, uw_ad: meAd });
+        }
+      }
+
+      // 5) Logları yaz
+      if (loglar.length) {
+        await sb('acente_kio_log', { method: 'POST', body: JSON.stringify(loglar), prefer: 'return=minimal' });
+      }
+      await logKaydet(uw_id, meAd, 'kio_revize', `${ozet.yeni} giriş, ${ozet.cikan} çıkış, ${ozet.guncellenen} güncelleme, ${ozet.geri_donen} geri dönen`, null);
+
+      return res.json({ mode: 'uygula', ozet, revizyon_id: revizyonId });
+    }
+
+    // KİO revizyon geçmişi (giriş/çıkış logları)
+    if (action === 'kio_log') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const limit = Math.min(((payload || {}).limit) || 200, 500);
+      const rows = await sb(`acente_kio_log?select=*&order=created_at.desc&limit=${limit}`);
+      return res.json({ loglar: rows });
+    }
+
+    // Eski (pasif) KİO listesi
+    if (action === 'kio_eski') {
+      if (!isAdmin) return res.status(403).json({ error: 'Sadece admin' });
+      const rows = await sb('acente_kio?select=kod,ad,il,sompo_bolge,cikis_tarihi&aktif=eq.false&order=cikis_tarihi.desc');
+      return res.json({ eski: rows });
     }
 
     return res.status(400).json({ error: 'Bilinmeyen aksiyon' });
