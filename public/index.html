@@ -25,6 +25,10 @@
   .login-brand img{height:32px;width:auto}
   .login-brand span{font-size:15px;font-weight:700;color:var(--dark);letter-spacing:.01em}
   .login-brand small{font-weight:400;color:var(--muted);font-size:12px}
+  .ses-btn{position:absolute;top:30px;right:44px;z-index:7;width:42px;height:42px;border-radius:50%;border:1px solid rgba(200,16,46,.15);background:rgba(255,255,255,.7);backdrop-filter:blur(10px);color:var(--red);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;animation:brandFade 1.2s .5s forwards;transition:transform .3s,box-shadow .3s,background .3s}
+  .ses-btn:hover{transform:scale(1.08);box-shadow:0 8px 24px -8px rgba(200,16,46,.35);background:#fff}
+  .ses-btn:active{transform:scale(.96)}
+  @media(max-width:860px){.ses-btn{top:20px;right:20px;width:38px;height:38px}}
   @keyframes brandFade{to{opacity:1}}
   /* sol hero */
   .login-hero{flex:1;min-width:320px;max-width:560px;position:relative}
@@ -150,6 +154,10 @@
 <div id="agLabels" style="position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden"></div>
 <div id="login">
   <div class="login-brand"><img src="sompo-logo.png" alt="Sompo"><span>Sompo <small>· Endüstriyel Riskler</small></span></div>
+  <button id="sesBtn" class="ses-btn" onclick="sesToggle()" title="Sesi aç/kapat" aria-label="Ses">
+    <svg id="sesAcik" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+    <svg id="sesKapali" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+  </button>
   <div class="login-hero">
     <div class="orb-wrap"><div class="orb"><img src="sompo-logo.png" alt="Sompo"></div></div>
     <div class="login-eyebrow">Acente Arama Takip Sistemi</div>
@@ -180,6 +188,115 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="three.min.js"></script>
 <script>
+// ===== SES MOTORU (Web Audio API — dış dosya yok, koddan üretilir) =====
+window._sesAcik = true; // varsayılan açık
+(function(){
+  let ctx=null, master=null, ambiGain=null, ambiOsc=null, ambiOsc2=null, baslatildi=false, whooshCaldi=false;
+
+  function kur(){
+    if(ctx)return;
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return;
+    ctx=new AC();
+    master=ctx.createGain();
+    master.gain.value = window._sesAcik ? 1 : 0;
+    master.connect(ctx.destination);
+
+    // ambiyans: iki hafif sinüs + alçak geçiren filtre (yumuşak uğultu)
+    ambiGain=ctx.createGain();ambiGain.gain.value=0;
+    const flt=ctx.createBiquadFilter();flt.type='lowpass';flt.frequency.value=380;
+    ambiOsc=ctx.createOscillator();ambiOsc.type='sine';ambiOsc.frequency.value=68;
+    ambiOsc2=ctx.createOscillator();ambiOsc2.type='sine';ambiOsc2.frequency.value=102;
+    ambiOsc.connect(flt);ambiOsc2.connect(flt);flt.connect(ambiGain);ambiGain.connect(master);
+    ambiOsc.start();ambiOsc2.start();
+  }
+
+  // açılış whoosh: filtreli gürültü süpürme
+  function whoosh(){
+    if(!ctx||whooshCaldi)return;whooshCaldi=true;
+    const dur=1.1;
+    const buf=ctx.createBuffer(1,ctx.sampleRate*dur,ctx.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*0.5;
+    const src=ctx.createBufferSource();src.buffer=buf;
+    const flt=ctx.createBiquadFilter();flt.type='bandpass';flt.Q.value=0.8;
+    const g=ctx.createGain();
+    const now=ctx.currentTime;
+    // frekans süpürme: alçaktan yükseğe (whoosh hissi)
+    flt.frequency.setValueAtTime(200,now);
+    flt.frequency.exponentialRampToValueAtTime(2200,now+dur*0.6);
+    flt.frequency.exponentialRampToValueAtTime(600,now+dur);
+    g.gain.setValueAtTime(0,now);
+    g.gain.linearRampToValueAtTime(0.28,now+0.15);
+    g.gain.exponentialRampToValueAtTime(0.001,now+dur);
+    src.connect(flt);flt.connect(g);g.connect(master);
+    src.start(now);src.stop(now+dur);
+
+    // whoosh sonrası hafif "parıltı" tonu
+    const o=ctx.createOscillator();o.type='sine';
+    const og=ctx.createGain();
+    o.frequency.setValueAtTime(523,now+0.5);
+    o.frequency.exponentialRampToValueAtTime(784,now+0.9);
+    og.gain.setValueAtTime(0,now+0.5);
+    og.gain.linearRampToValueAtTime(0.08,now+0.62);
+    og.gain.exponentialRampToValueAtTime(0.001,now+1.2);
+    o.connect(og);og.connect(master);o.start(now+0.5);o.stop(now+1.2);
+  }
+
+  // fare hareketi ambiyansı: hıza göre uğultu yükselir
+  let hedefAmbi=0;
+  window._sesHareket=function(hiz){
+    if(!ctx||!ambiGain)return;
+    hedefAmbi=Math.min(0.04, hiz*0.5); // hıza bağlı, çok kısık
+  };
+  function ambiDongu(){
+    requestAnimationFrame(ambiDongu);
+    if(ambiGain){
+      const cur=ambiGain.gain.value;
+      ambiGain.gain.value += (hedefAmbi-cur)*0.05;
+      hedefAmbi*=0.94; // yavaşça sön
+    }
+  }
+  ambiDongu();
+
+  // ilk kullanıcı etkileşiminde başlat (tarayıcı kuralı)
+  function ilkEtkilesim(){
+    if(baslatildi)return;baslatildi=true;
+    kur();
+    if(ctx&&ctx.state==='suspended')ctx.resume();
+    if(window._sesAcik)setTimeout(whoosh,60);
+    ['pointermove','pointerdown','keydown','touchstart'].forEach(e=>removeEventListener(e,ilkEtkilesim));
+  }
+  ['pointermove','pointerdown','keydown','touchstart'].forEach(e=>addEventListener(e,ilkEtkilesim,{passive:true}));
+
+  // aç/kapa
+  window.sesToggle=function(){
+    window._sesAcik=!window._sesAcik;
+    if(!ctx){kur();if(ctx&&ctx.state==='suspended')ctx.resume();}
+    if(master&&ctx){
+      master.gain.linearRampToValueAtTime(window._sesAcik?1:0, ctx.currentTime+0.2);
+      if(window._sesAcik&&!whooshCaldi)setTimeout(whoosh,60);
+    }
+    const a=document.getElementById('sesAcik'),k=document.getElementById('sesKapali');
+    if(a&&k){a.style.display=window._sesAcik?'block':'none';k.style.display=window._sesAcik?'none':'block';}
+  };
+
+  // giriş başarılı olunca hoş bir onay tonu
+  window._sesGiris=function(){
+    if(!ctx||!window._sesAcik)return;
+    const now=ctx.currentTime;
+    [523,659,784].forEach((f,i)=>{ // do-mi-sol yükselen akor
+      const o=ctx.createOscillator();o.type='sine';
+      const g=ctx.createGain();
+      o.frequency.value=f;
+      g.gain.setValueAtTime(0,now+i*0.08);
+      g.gain.linearRampToValueAtTime(0.12,now+i*0.08+0.04);
+      g.gain.exponentialRampToValueAtTime(0.001,now+i*0.08+0.5);
+      o.connect(g);g.connect(master);o.start(now+i*0.08);o.stop(now+i*0.08+0.5);
+    });
+  };
+})();
+
 // ===== ACENTE AĞI (three.js — canlı KİO isimleriyle) =====
 window._dalgaModu='giris';
 (function(){
@@ -199,8 +316,17 @@ window._dalgaModu='giris';
   };
 
   let nodes=[],labelEls=[],nodeGeo,nodePos,nodePts,lineGeo,lineMat,N=0,hazir=false;
-  let mx=0,my=0,tmx=0,tmy=0;
-  addEventListener('mousemove',e=>{tmx=(e.clientX/innerWidth-0.5)*2;tmy=(e.clientY/innerHeight-0.5)*2;});
+  let mx=0,my=0,tmx=0,tmy=0,_lastMX=0,_lastMY=0;
+  addEventListener('mousemove',e=>{
+    tmx=(e.clientX/innerWidth-0.5)*2;tmy=(e.clientY/innerHeight-0.5)*2;
+    // fare hızı → ses ambiyansı (sadece giriş modunda)
+    if(window._dalgaModu!=='app'&&window._sesHareket){
+      const dx=e.clientX-_lastMX,dy=e.clientY-_lastMY;
+      const hiz=Math.min(1,Math.sqrt(dx*dx+dy*dy)/60);
+      window._sesHareket(hiz);
+    }
+    _lastMX=e.clientX;_lastMY=e.clientY;
+  });
 
   function kurAg(acenteler){
     N=acenteler.length;
@@ -361,6 +487,7 @@ async function doLogin(){
   try{
     const r=await api('login',{uw_id:id,password:p});
     CUR=r.user;PASS=p;
+    if(window._sesGiris)window._sesGiris();
     sessionStorage.setItem('acur',JSON.stringify({u:CUR,p:PASS}));
     enterApp();
   }catch(e){$('loginErr').textContent=e.error||'Giriş başarısız';}
