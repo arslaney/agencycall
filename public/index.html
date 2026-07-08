@@ -189,7 +189,7 @@ window._dalgaModu='giris';
 
   const scene=new THREE.Scene();
   const cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,100);
-  cam.position.z=21;
+  cam.position.z=24;
   const rn=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
   rn.setSize(innerWidth,innerHeight,false);rn.setPixelRatio(Math.min(devicePixelRatio,2));
 
@@ -207,7 +207,7 @@ window._dalgaModu='giris';
     nodes=[];
     for(let i=0;i<N;i++){
       nodes.push({
-        pos:new THREE.Vector3((Math.random()-0.5)*34,(Math.random()-0.5)*20,(Math.random()-0.5)*7),
+        pos:new THREE.Vector3((Math.random()-0.5)*40,(Math.random()-0.5)*23,(Math.random()-0.5)*7),
         vel:new THREE.Vector3((Math.random()-0.5)*0.01,(Math.random()-0.5)*0.01,(Math.random()-0.5)*0.006),
         renk:BOLGE_RENK[acenteler[i].b]||0x999999
       });
@@ -247,8 +247,8 @@ window._dalgaModu='giris';
       const hiz=app?0.3:1;
       nodes.forEach((n,i)=>{
         n.pos.x+=n.vel.x*hiz;n.pos.y+=n.vel.y*hiz;n.pos.z+=n.vel.z*hiz;
-        if(Math.abs(n.pos.x)>17)n.vel.x*=-1;
-        if(Math.abs(n.pos.y)>10)n.vel.y*=-1;
+        if(Math.abs(n.pos.x)>20)n.vel.x*=-1;
+        if(Math.abs(n.pos.y)>11.5)n.vel.y*=-1;
         if(Math.abs(n.pos.z)>3.5)n.vel.z*=-1;
         nodePos[i*3]=n.pos.x;nodePos[i*3+1]=n.pos.y;nodePos[i*3+2]=n.pos.z;
       });
@@ -260,7 +260,7 @@ window._dalgaModu='giris';
       const segs=[];
       for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){
         const d=nodes[i].pos.distanceTo(nodes[j].pos);
-        if(d<7.5)segs.push(nodes[i].pos.x,nodes[i].pos.y,nodes[i].pos.z,nodes[j].pos.x,nodes[j].pos.y,nodes[j].pos.z);
+        if(d<6)segs.push(nodes[i].pos.x,nodes[i].pos.y,nodes[i].pos.z,nodes[j].pos.x,nodes[j].pos.y,nodes[j].pos.z);
       }
       lineGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(segs),3));
 
@@ -293,7 +293,7 @@ window._dalgaModu='giris';
       list=list.map(x=>({ad:kisalt(x.ad),b:x.b})).filter(x=>x.ad);
       // karıştır, en fazla 26 tane göster
       for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
-      kurAg(list.slice(0,60));
+      kurAg(list.slice(0,80));
     })
     .catch(()=>{
       kurAg([{ad:'NEOLIFE GRUP',b:'OAB'},{ad:'ETA SİGORTA',b:'IST-AND1'},{ad:'MARSİ',b:'GAB'},{ad:'DAFNE',b:'IST-AVR2'},{ad:'2A GRUP',b:'OAB'},{ad:'ADİL',b:'IST-AND1'},{ad:'DNB GLOBAL',b:'ADZ'},{ad:'BNC',b:'IST-AND1'},{ad:'CEMRE',b:'IST-AND2'},{ad:'DİZAYN',b:'IST-AVR2'}]);
