@@ -50,6 +50,13 @@ module.exports = async (req, res) => {
     if (action === 'versiyon') {
       return res.json({ surum: 'ADAY-KIO-2026-06-26', takip: true, aday: true });
     }
+    // --- KİO İSİMLERİ (giriş ekranı ağı için, şifresiz — sadece ad+bölge, hassas değil) ---
+    if (action === 'kio_isimler') {
+      const rows = await sb('acente_kio?select=ad,sompo_bolge&aktif=eq.true&order=ad.asc');
+      // sadece ad ve bölge; başka hiçbir veri dönmez
+      const isimler = rows.map(r => ({ ad: r.ad, b: r.sompo_bolge }));
+      return res.json({ isimler });
+    }
     // --- LOGIN ---
     if (action === 'login') {
       if (password !== APP_PASSWORD) return res.status(401).json({ error: 'Şifre hatalı' });
