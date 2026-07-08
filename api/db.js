@@ -546,7 +546,7 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
       const ay = (payload && payload.ay) || (new Date().getMonth() + 1);
 
       // 1) Kendi görüşmelerim (tüm yıl)
-      const benim = await sb(`acente_gorusmeler_kio?select=bolge,acente,kio_kod,kio_mu,durum,prim,ay,yil&uw_id=eq.${encodeURIComponent(uw_id)}&yil=eq.${yil}`);
+      const benim = await sb(`acente_gorusmeler_kio?select=bolge,acente,kio_kod,kio_ad,kio_mu,durum,prim,ay,yil,tarih&uw_id=eq.${encodeURIComponent(uw_id)}&yil=eq.${yil}`);
       const benimAy = benim.filter(r => r.ay === ay);
       const istat = (rows) => {
         const kioKod = new Set(), acenteler = new Set();
@@ -610,11 +610,104 @@ Sadece değerlendirmeyi yaz, başka açıklama ekleme.`;
       const h = await sb(`acente_hedef?select=hedef&uw_id=eq.${encodeURIComponent(uw_id)}&yil=eq.${yil}&ay=eq.${ay}`);
       const hedef = (h[0] && h[0].hedef) || 0;
 
+      // === HATIRLATMALAR (dashboard uyarı şeridi) ===
+      const hatirlatmalar = [];
+      const bugun = new Date();
+
+      // a) Bu ay hiç aramadığım bölgemdeki KİO — bölge bazında bu ay arama var mı
+      const buAyArananKod = new Set(benimAy.filter(r => r.kio_mu).map(r => r.kio_kod));
+      const bolgeAyDurum = {};
+      bolgeKioDurum.forEach(k => {
+        if (!bolgeAyDurum[k.bolge]) bolgeAyDurum[k.bolge] = { top: 0, buAy: 0 };
+        bolgeAyDurum[k.bolge].top++;
+        if (buAyArananKod.has(k.kod)) bolgeAyDurum[k.bolge].buAy++;
+      });
+      const ayHicAranmayan = Object.entries(bolgeAyDurum).filter(([b, s]) => s.buAy === 0 && s.top > 0);
+      if (ayHicAranmayan.length) {
+        const bolgeAd = ayHicAranmayan.map(([b]) => b).join(', ');
+        const toplamKio = ayHicAranmayan.reduce((a, [b, s]) => a + s.top, 0);
+        hatirlatmalar.push({
+          tip: 'bolge', renk: 'kirmizi', ikon: '📍',
+          baslik: 'Bu ay aranmayan bölge',
+          mesaj: `${bolgeAd} bölgen(ler)inde bu ay hiç KİO aramadın (${toplamKio} KİO bekliyor).`
+        });
+      }
+
+      // b) 30+ gündür aramadığım KİO'lar (bu yıl aradıklarımdan, son arama tarihine göre)
+      const kioSonTarih = {};
+      benim.filter(r => r.kio_mu && r.kio_kod).forEach(r => {
+        const t = r.tarih;
+        if (!kioSonTarih[r.kio_kod] || t > kioSonTarih[r.kio_kod].tarih) {
+          kioSonTarih[r.kio_kod] = { tarih: t, ad: r.kio_ad || r.acente };
+        }
+      });
+      const eskiKiolar = [];
+      Object.entries(kioSonTarih).forEach(([kod, o]) => {
+        const gun = Math.floor((bugun - new Date(o.tarih)) / 86400000);
+        if (gun >= 30) eskiKiolar.push({ ad: o.ad, gun });
+      });
+      eskiKiolar.sort((a, b) => b.gun - a.gun);
+      if (eskiKiolar.length) {
+        const ilk = eskiKiolar.slice(0, 3).map(k => `${k.ad} (${k.gun} gün)`).join(', ');
+        hatirlatmalar.push({
+          tip: 'eski', renk: 'sari', ikon: '⏰',
+          baslik: 'Uzun süredir aranmayan KİO',
+          mesaj: `${eskiKiolar.length} KİO 30+ gündür aranmadı. En eskiler: ${ilk}${eskiKiolar.length > 3 ? '…' : ''}`
+        });
+      }
+
+      // c) Aylık hedef durumu
+      if (hedef > 0) {
+        const kalan = hedef - ayStat.gorusme;
+        if (kalan > 0) {
+          hatirlatmalar.push({
+            tip: 'hedef', renk: 'sari', ikon: '🎯',
+            baslik: 'Aylık hedef',
+            mesaj: `Bu ayki hedefine ${kalan} görüşme kaldı (${ayStat.gorusme}/${hedef}).`
+          });
+        } else {
+          hatirlatmalar.push({
+            tip: 'hedef', renk: 'yesil', ikon: '🎉',
+            baslik: 'Hedef tamam',
+            mesaj: `Bu ayki hedefini tamamladın! (${ayStat.gorusme}/${hedef})`
+          });
+        }
+      }
+
+      // d) Teklif verilip takip edilmeyen acenteler (durum 'Teklif Verildi' ama sonrası yok, 14+ gün)
+      const teklifAcente = {};
+      benim.forEach(r => {
+        const ac = (r.acente || '').trim();
+        if (!ac) return;
+        if (!teklifAcente[ac]) teklifAcente[ac] = { sonTeklif: null, sonrasi: false };
+        if (r.durum === 'Teklif Verildi') {
+          if (!teklifAcente[ac].sonTeklif || r.tarih > teklifAcente[ac].sonTeklif) teklifAcente[ac].sonTeklif = r.tarih;
+        }
+        if (['Poliçe Bağlandı', 'Kaybedildi', 'RT Yapıldı'].includes(r.durum)) teklifAcente[ac].sonrasi = true;
+      });
+      const takipsiz = [];
+      Object.entries(teklifAcente).forEach(([ac, o]) => {
+        if (o.sonTeklif && !o.sonrasi) {
+          const gun = Math.floor((bugun - new Date(o.sonTeklif)) / 86400000);
+          if (gun >= 14) takipsiz.push({ ad: ac, gun });
+        }
+      });
+      takipsiz.sort((a, b) => b.gun - a.gun);
+      if (takipsiz.length) {
+        const ilk = takipsiz.slice(0, 3).map(k => `${k.ad} (${k.gun} gün)`).join(', ');
+        hatirlatmalar.push({
+          tip: 'takip', renk: 'mavi', ikon: '📋',
+          baslik: 'Takip bekleyen teklif',
+          mesaj: `${takipsiz.length} acenteye teklif verdin ama sonuç girilmedi: ${ilk}${takipsiz.length > 3 ? '…' : ''}`
+        });
+      }
+
       return res.json({
         yil, ay, yilStat, ayStat,
         bolgelerim: benimBolgeler, bolgeKioDurum,
         liderlik, benimSira, toplamUw: liderlik.length,
-        hedef, hedefGerceklesen: ayStat.gorusme
+        hedef, hedefGerceklesen: ayStat.gorusme,
+        hatirlatmalar
       });
     }
 
