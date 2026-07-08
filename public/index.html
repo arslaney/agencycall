@@ -20,6 +20,12 @@
   #login{position:relative;z-index:2}
   .hidden{display:none!important}
   #login{min-height:100vh;display:flex;align-items:center;justify-content:center;gap:6vw;background:transparent;padding:40px 6vw;flex-wrap:wrap}
+  /* sol üst köşe marka */
+  .login-brand{position:absolute;top:30px;left:44px;z-index:6;display:flex;align-items:center;gap:11px;opacity:0;animation:brandFade 1.2s .3s forwards}
+  .login-brand img{height:32px;width:auto}
+  .login-brand span{font-size:15px;font-weight:700;color:var(--dark);letter-spacing:.01em}
+  .login-brand small{font-weight:400;color:var(--muted);font-size:12px}
+  @keyframes brandFade{to{opacity:1}}
   /* sol hero */
   .login-hero{flex:1;min-width:320px;max-width:560px;position:relative}
   .login-hero::before{content:'';position:absolute;left:-6vw;right:-10%;top:-50px;bottom:-50px;z-index:-1;background:radial-gradient(ellipse 80% 92% at 32% 52%,rgba(251,250,251,.95) 0%,rgba(251,250,251,.86) 46%,rgba(251,250,251,.42) 73%,transparent 100%);filter:blur(8px);pointer-events:none}
@@ -40,8 +46,6 @@
   /* sağ cam kart */
   .loginbox{width:380px;max-width:100%;background:rgba(255,255,255,.72);backdrop-filter:blur(20px);border:1px solid rgba(200,16,46,.12);border-radius:22px;padding:36px 32px;box-shadow:0 30px 70px -24px rgba(200,16,46,.22),0 2px 8px rgba(0,0,0,.04);opacity:0;transform:translateY(40px) scale(.97);animation:cardIn 1.1s .9s cubic-bezier(.16,1,.3,1) forwards}
   @keyframes cardIn{to{opacity:1;transform:translateY(0) scale(1)}}
-  .loginbox .lb-logo{margin-bottom:20px}
-  .loginbox .lb-logo img{height:30px;width:auto}
   .loginbox .lb-h{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
   .loginbox .sub{font-size:13px;color:var(--muted);margin-bottom:26px}
   .loginbox label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin:16px 0 6px;text-transform:uppercase;letter-spacing:.4px}
@@ -52,7 +56,10 @@
   .loginbox button:disabled{opacity:.6;cursor:wait;transform:none}
   .loginbox .err{color:var(--red);font-size:12px;margin-top:12px;text-align:center;min-height:16px}
   .loginbox .hint{font-size:11px;color:#B5AEB2;margin-top:20px;text-align:center;line-height:1.6}
-  @media(max-width:860px){.login-hero{text-align:center;max-width:100%}.login-hero::before{left:-10%;right:-10%}.orb-wrap{display:none}.login-desc{margin-left:auto;margin-right:auto}}
+  @media(max-width:860px){.login-hero{text-align:center;max-width:100%}.login-hero::before{left:-10%;right:-10%}.orb-wrap{display:none}.login-desc{margin-left:auto;margin-right:auto}.login-brand{top:20px;left:20px}.login-brand small{display:none}}
+  /* acente ağı etiketleri */
+  .ag-lbl{position:absolute;transform:translate(-50%,-50%);font-size:10px;font-weight:600;white-space:nowrap;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.76);backdrop-filter:blur(3px);border:1px solid rgba(200,16,46,.14);box-shadow:0 2px 8px rgba(0,0,0,.05);letter-spacing:.01em;color:#1a1a1f;transition:opacity .4s}
+  .ag-lbl .d{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
   header{background:linear-gradient(rgba(18,18,20,0.72),rgba(18,18,20,0.80)),url('header-bg.jpg');background-size:cover;background-position:center 42%;color:#fff;padding:42px 26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
   header .brand{display:flex;align-items:center;gap:11px}
   header .dot{width:11px;height:11px;border-radius:50%;background:var(--red)}
@@ -140,7 +147,9 @@
 </head>
 <body>
 <canvas id="waveBg" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block"></canvas>
+<div id="agLabels" style="position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden"></div>
 <div id="login">
+  <div class="login-brand"><img src="sompo-logo.png" alt="Sompo"><span>Sompo <small>· Endüstriyel Riskler</small></span></div>
   <div class="login-hero">
     <div class="orb-wrap"><div class="orb"><img src="sompo-logo.png" alt="Sompo"></div></div>
     <div class="login-eyebrow">Acente Arama Takip Sistemi</div>
@@ -148,7 +157,6 @@
     <p class="login-desc">Her görüşme bir fırsat. Fareni oynat — sisteme girmeden önce, sistemin nabzını hisset.</p>
   </div>
   <div class="loginbox">
-    <div class="lb-logo"><img src="sompo-logo.png" alt="Sompo Sigorta"></div>
     <h2 class="lb-h">Giriş yap</h2>
     <div class="sub">Devam etmek için bilgilerinizi girin</div>
     <label>Kullanıcı</label><select id="loginUser"><option>Yükleniyor...</option></select>
@@ -172,66 +180,132 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="three.min.js"></script>
 <script>
-// ===== ARKA PLAN DALGA (three.js — gömülü, ilk tasarımın birebiri) =====
+// ===== ACENTE AĞI (three.js — canlı KİO isimleriyle) =====
 window._dalgaModu='giris';
 (function(){
   const cv=document.getElementById('waveBg');
+  const labelBox=document.getElementById('agLabels');
   if(!cv||typeof THREE==='undefined')return;
+
   const scene=new THREE.Scene();
-  const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,100);
-  camera.position.set(0,4,9);
-  const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
-  renderer.setSize(innerWidth,innerHeight,false);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  const cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,100);
+  cam.position.z=21;
+  const rn=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+  rn.setSize(innerWidth,innerHeight,false);rn.setPixelRatio(Math.min(devicePixelRatio,2));
 
-  // net kırmızı dalgalı grid (üst katman)
-  const geo=new THREE.PlaneGeometry(40,40,60,60);
-  const mat=new THREE.MeshBasicMaterial({color:0xC8102E,wireframe:true,transparent:true,opacity:0.28});
-  const mesh=new THREE.Mesh(geo,mat);
-  mesh.rotation.x=-Math.PI/2.2;mesh.position.y=-3;scene.add(mesh);
-  const base=geo.attributes.position.array.slice();
+  const BOLGE_RENK={
+    'IST-AND1':0xC8102E,'IST-AND2':0xE1223D,'IST-AVR1':0xF0846A,'IST-AVR2':0xFF9E7A,
+    'EGE':0x2563EB,'OAB':0x0A7D32,'GAB':0xE8821E,'MRM':0x8B5CF6,'ADZ':0x0891B2,'KDZ':0xEC4899
+  };
 
-  // soluk ikinci katman (derinlik)
-  const geo2=new THREE.PlaneGeometry(40,40,50,50);
-  const mesh2=new THREE.Mesh(geo2,new THREE.MeshBasicMaterial({color:0xE1223D,wireframe:true,transparent:true,opacity:0.12}));
-  mesh2.rotation.x=-Math.PI/2.2;mesh2.position.y=-3.6;scene.add(mesh2);
-  const base2=geo2.attributes.position.array.slice();
-
+  let nodes=[],labelEls=[],nodeGeo,nodePos,nodePts,lineGeo,lineMat,N=0,hazir=false;
   let mx=0,my=0,tmx=0,tmy=0;
   addEventListener('mousemove',e=>{tmx=(e.clientX/innerWidth-0.5)*2;tmy=(e.clientY/innerHeight-0.5)*2;});
 
-  let t=0;
-  function animate(){
-    requestAnimationFrame(animate);
-    const app=window._dalgaModu==='app';
-    t += app?0.006:0.02;
-    mx+=(tmx-mx)*0.05;my+=(tmy-my)*0.05;
-
-    // app modunda dalgalar çok soluk
-    mat.opacity   = app?0.06:0.30;
-    mesh2.material.opacity = app?0.03:0.13;
-    const genlik = app?0.35:0.85;
-
-    const p=geo.attributes.position.array;
-    for(let i=0;i<p.length;i+=3){
-      const x=base[i],y=base[i+1];
-      p[i+2]=Math.sin(x*0.35+t)*genlik+Math.cos(y*0.35+t*0.85)*genlik;
+  function kurAg(acenteler){
+    N=acenteler.length;
+    nodes=[];
+    for(let i=0;i<N;i++){
+      nodes.push({
+        pos:new THREE.Vector3((Math.random()-0.5)*34,(Math.random()-0.5)*20,(Math.random()-0.5)*7),
+        vel:new THREE.Vector3((Math.random()-0.5)*0.01,(Math.random()-0.5)*0.01,(Math.random()-0.5)*0.006),
+        renk:BOLGE_RENK[acenteler[i].b]||0x999999
+      });
     }
-    geo.attributes.position.needsUpdate=true;
-    const p2=geo2.attributes.position.array;
-    for(let i=0;i<p2.length;i+=3){
-      const x=base2[i],y=base2[i+1];
-      p2[i+2]=Math.sin(x*0.3+t*1.2+1)*genlik*0.8+Math.cos(y*0.3+t)*genlik*0.8;
-    }
-    geo2.attributes.position.needsUpdate=true;
+    nodeGeo=new THREE.BufferGeometry();
+    nodePos=new Float32Array(N*3);
+    const nodeCol=new Float32Array(N*3);
+    nodes.forEach((n,i)=>{
+      nodePos[i*3]=n.pos.x;nodePos[i*3+1]=n.pos.y;nodePos[i*3+2]=n.pos.z;
+      const c=new THREE.Color(n.renk);nodeCol[i*3]=c.r;nodeCol[i*3+1]=c.g;nodeCol[i*3+2]=c.b;
+    });
+    nodeGeo.setAttribute('position',new THREE.BufferAttribute(nodePos,3));
+    nodeGeo.setAttribute('color',new THREE.BufferAttribute(nodeCol,3));
+    nodePts=new THREE.Points(nodeGeo,new THREE.PointsMaterial({size:0.3,vertexColors:true,transparent:true,opacity:.9}));
+    scene.add(nodePts);
 
-    mesh.rotation.z=mx*0.12;mesh2.rotation.z=mx*0.08;
-    camera.position.x+=(mx*2.5-camera.position.x)*0.04;
-    camera.position.y+=(4-my*1.5-camera.position.y)*0.04;
-    camera.lookAt(0,-2,0);
-    renderer.render(scene,camera);
+    lineGeo=new THREE.BufferGeometry();
+    lineMat=new THREE.LineBasicMaterial({color:0xC8102E,transparent:true,opacity:.16});
+    scene.add(new THREE.LineSegments(lineGeo,lineMat));
+
+    // HTML etiketleri
+    labelEls=acenteler.map(a=>{
+      const el=document.createElement('div');el.className='ag-lbl';
+      const c='#'+(BOLGE_RENK[a.b]||0x999999).toString(16).padStart(6,'0');
+      el.innerHTML='<span class="d" style="background:'+c+'"></span>'+a.ad;
+      labelBox.appendChild(el);return el;
+    });
+    hazir=true;
   }
-  animate();
-  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight,false);});
+
+  const tmp=new THREE.Vector3();
+  function anim(){
+    requestAnimationFrame(anim);
+    const app=window._dalgaModu==='app';
+    mx+=(tmx-mx)*0.05;my+=(tmy-my)*0.05;
+    if(hazir){
+      const hiz=app?0.3:1;
+      nodes.forEach((n,i)=>{
+        n.pos.x+=n.vel.x*hiz;n.pos.y+=n.vel.y*hiz;n.pos.z+=n.vel.z*hiz;
+        if(Math.abs(n.pos.x)>17)n.vel.x*=-1;
+        if(Math.abs(n.pos.y)>10)n.vel.y*=-1;
+        if(Math.abs(n.pos.z)>3.5)n.vel.z*=-1;
+        nodePos[i*3]=n.pos.x;nodePos[i*3+1]=n.pos.y;nodePos[i*3+2]=n.pos.z;
+      });
+      nodeGeo.attributes.position.needsUpdate=true;
+      nodePts.material.opacity=app?0.22:0.9;
+      if(lineMat)lineMat.opacity=app?0.06:0.16;
+
+      // bağlantılar
+      const segs=[];
+      for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){
+        const d=nodes[i].pos.distanceTo(nodes[j].pos);
+        if(d<7.5)segs.push(nodes[i].pos.x,nodes[i].pos.y,nodes[i].pos.z,nodes[j].pos.x,nodes[j].pos.y,nodes[j].pos.z);
+      }
+      lineGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(segs),3));
+
+      scene.rotation.y=mx*0.2;scene.rotation.x=my*0.12;
+      rn.render(scene,cam);
+
+      // etiketler: app modunda gizli, giriş modunda görünür
+      nodes.forEach((n,i)=>{
+        const el=labelEls[i];
+        if(app){el.style.display='none';return;}
+        tmp.copy(n.pos).applyMatrix4(scene.matrixWorld).project(cam);
+        if(tmp.z<1){
+          el.style.display='block';
+          el.style.left=((tmp.x*0.5+0.5)*innerWidth)+'px';
+          el.style.top=((-tmp.y*0.5+0.5)*innerHeight)+'px';
+          el.style.opacity=Math.max(0.2,1-Math.abs(tmp.z)*0.6);
+        }else el.style.display='none';
+      });
+    }
+  }
+  anim();
+  addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rn.setSize(innerWidth,innerHeight,false);});
+
+  // canlı KİO isimlerini çek (şifresiz uç); başarısızsa örnek isimlerle kur
+  fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'kio_isimler'})})
+    .then(r=>r.json())
+    .then(d=>{
+      let list=(d&&d.isimler)||[];
+      // isimleri kısalt (SİGORTA vb. ekleri at, uzunları buda) ve sayıyı sınırla (karmaşa olmasın)
+      list=list.map(x=>({ad:kisalt(x.ad),b:x.b})).filter(x=>x.ad);
+      // karıştır, en fazla 26 tane göster
+      for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
+      kurAg(list.slice(0,60));
+    })
+    .catch(()=>{
+      kurAg([{ad:'NEOLIFE GRUP',b:'OAB'},{ad:'ETA SİGORTA',b:'IST-AND1'},{ad:'MARSİ',b:'GAB'},{ad:'DAFNE',b:'IST-AVR2'},{ad:'2A GRUP',b:'OAB'},{ad:'ADİL',b:'IST-AND1'},{ad:'DNB GLOBAL',b:'ADZ'},{ad:'BNC',b:'IST-AND1'},{ad:'CEMRE',b:'IST-AND2'},{ad:'DİZAYN',b:'IST-AVR2'}]);
+    });
+
+  function kisalt(ad){
+    if(!ad)return '';
+    let s=ad.replace(/\s+(SİGORTA|ARACILIK|A\.Ş\.?|LTD|ŞTİ|SİG\.?|A$).*$/i,'').trim();
+    if(!s)s=ad;
+    if(s.length>20)s=s.slice(0,19)+'…';
+    return s;
+  }
 })();
 function dalgaModu(m){window._dalgaModu=m;}
 </script>
