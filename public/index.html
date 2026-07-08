@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=3">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Acente Arama">
 <meta name="theme-color" content="#C8102E">
@@ -259,23 +260,36 @@ window._sesAcik = true; // varsayılan açık
   }
   ambiDongu();
 
-  // ilk kullanıcı etkileşiminde başlat (tarayıcı kuralı)
+  // ilk kullanıcı etkileşiminde başlat (tarayıcı kuralı: gerçek jest gerekir)
   function ilkEtkilesim(){
-    if(baslatildi)return;baslatildi=true;
     kur();
-    if(ctx&&ctx.state==='suspended')ctx.resume();
-    if(window._sesAcik)setTimeout(whoosh,60);
-    ['pointermove','pointerdown','keydown','touchstart'].forEach(e=>removeEventListener(e,ilkEtkilesim));
+    if(!ctx)return;
+    // resume bir promise döner; başarılı olursa whoosh çal ve dinleyicileri kaldır
+    if(ctx.state==='suspended'){
+      ctx.resume().then(()=>{ tamamla(); });
+    }else{
+      tamamla();
+    }
   }
-  ['pointermove','pointerdown','keydown','touchstart'].forEach(e=>addEventListener(e,ilkEtkilesim,{passive:true}));
+  function tamamla(){
+    if(baslatildi)return;
+    if(!ctx||ctx.state!=='running')return; // gerçekten çalışmadıysa bekle
+    baslatildi=true;
+    if(window._sesAcik)setTimeout(whoosh,60);
+    ['pointerdown','click','keydown','touchstart','pointermove'].forEach(e=>removeEventListener(e,ilkEtkilesim));
+  }
+  // click/pointerdown/keydown en güvenilir jestler; pointermove yedek
+  ['pointerdown','click','keydown','touchstart','pointermove'].forEach(e=>addEventListener(e,ilkEtkilesim,{passive:true}));
 
   // aç/kapa
   window.sesToggle=function(){
+    kur();
+    if(ctx&&ctx.state==='suspended')ctx.resume();
     window._sesAcik=!window._sesAcik;
-    if(!ctx){kur();if(ctx&&ctx.state==='suspended')ctx.resume();}
     if(master&&ctx){
       master.gain.linearRampToValueAtTime(window._sesAcik?1:0, ctx.currentTime+0.2);
-      if(window._sesAcik&&!whooshCaldi)setTimeout(whoosh,60);
+      // ses açıldıysa ve whoosh henüz çalmadıysa çal
+      if(window._sesAcik){ baslatildi=true; if(!whooshCaldi)setTimeout(whoosh,60); }
     }
     const a=document.getElementById('sesAcik'),k=document.getElementById('sesKapali');
     if(a&&k){a.style.display=window._sesAcik?'block':'none';k.style.display=window._sesAcik?'none':'block';}
@@ -869,12 +883,26 @@ async function renderPanelim(){
   bk.forEach(k=>{const b=k.bolge||'?';if(!bolgeGrup[b])bolgeGrup[b]={top:0,ben:0};bolgeGrup[b].top++;if(k.ben_aradim)bolgeGrup[b].ben++;});
   // liderlik
   const lider=d.liderlik||[];
+  const hatirlatmalar=d.hatirlatmalar||[];
+  const hatirlatmaRenk={kirmizi:{bg:'#fdecea',bd:'#f5b5ae',fg:'#C8102E'},sari:{bg:'#fef6e7',bd:'#f3d391',fg:'#a16207'},mavi:{bg:'#eff5ff',bd:'#b8d0f5',fg:'#2563eb'},yesil:{bg:'#e6f5ec',bd:'#a3dab8',fg:'#0a7d32'}};
+  const hatirlatmaHTML = hatirlatmalar.length ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:6px">🔔 Sana Özel Hatırlatmalar <span style="background:var(--red);color:#fff;font-size:11px;padding:1px 7px;border-radius:20px">${hatirlatmalar.length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${hatirlatmalar.map(h=>{const c=hatirlatmaRenk[h.renk]||hatirlatmaRenk.sari;return `<div style="background:${c.bg};border:1px solid ${c.bd};border-radius:12px;padding:12px 16px;display:flex;align-items:flex-start;gap:12px">
+          <span style="font-size:18px;line-height:1.2">${h.ikon}</span>
+          <div style="flex:1"><div style="font-weight:700;font-size:13px;color:${c.fg};margin-bottom:2px">${esc(h.baslik)}</div><div style="font-size:13px;color:#3f3f46;line-height:1.5">${esc(h.mesaj)}</div></div>
+        </div>`;}).join('')}
+      </div>
+    </div>` : '';
 
   $('view').innerHTML=`
     <div style="background:linear-gradient(135deg,#C8102E,#9a0c24);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:16px">
       <div style="font-size:13px;opacity:.85">Merhaba ${esc(CUR.ad||'')}</div>
       <div style="font-size:20px;font-weight:800;margin-top:2px">Ekipte ${d.benimSira}. sıradasın <span style="opacity:.7;font-size:14px">/ ${d.toplamUw} UW</span></div>
     </div>
+
+    ${hatirlatmaHTML}
 
     <div class="kpis">
       <div class="kpi"><div class="v">${yS.gorusme||0}</div><div class="l">Görüşme (yıl)</div></div>
