@@ -19,19 +19,40 @@
   #app{position:relative;z-index:2}
   #login{position:relative;z-index:2}
   .hidden{display:none!important}
-  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:transparent;padding:16px}
-  .loginbox{background:rgba(255,255,255,.82);backdrop-filter:blur(16px);border:1px solid rgba(200,16,46,.1);border-radius:14px;padding:38px 34px;width:360px;max-width:100%;box-shadow:0 30px 70px -24px rgba(200,16,46,.25),0 2px 8px rgba(0,0,0,.05)}
-  .loginbox .logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-  .loginbox .dot{width:14px;height:14px;border-radius:50%;background:var(--red)}
-  .loginbox h1{font-size:19px;font-weight:800}
-  .loginbox .sub{font-size:12px;color:var(--muted);margin-bottom:24px}
-  .loginbox label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:14px 0 5px;text-transform:uppercase;letter-spacing:.4px}
-  .loginbox select,.loginbox input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit}
-  .loginbox button{width:100%;margin-top:22px;padding:12px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
-  .loginbox button:hover{background:#a50d26}
-  .loginbox button:disabled{opacity:.6;cursor:wait}
-  .loginbox .err{color:var(--red);font-size:12px;margin-top:10px;text-align:center;min-height:16px}
-  .loginbox .hint{font-size:11px;color:var(--muted);margin-top:18px;text-align:center;line-height:1.6}
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;gap:6vw;background:transparent;padding:40px 6vw;flex-wrap:wrap}
+  /* sol hero */
+  .login-hero{flex:1;min-width:320px;max-width:560px;position:relative}
+  .login-hero::before{content:'';position:absolute;left:-6vw;right:-10%;top:-50px;bottom:-50px;z-index:-1;background:radial-gradient(ellipse 80% 92% at 32% 52%,rgba(251,250,251,.95) 0%,rgba(251,250,251,.86) 46%,rgba(251,250,251,.42) 73%,transparent 100%);filter:blur(8px);pointer-events:none}
+  .login-hero>*{position:relative;z-index:1}
+  .orb-wrap{position:absolute;right:4%;top:-130px;width:128px;height:128px;pointer-events:none;opacity:0;animation:orbFade 1.4s 1.2s forwards}
+  @keyframes orbFade{to{opacity:1}}
+  .orb{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 50% 45%,#fff 0%,#fff 46%,rgba(200,16,46,.06) 60%,transparent 72%);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 40px -8px rgba(200,16,46,.28)}
+  .orb::before{content:'';position:absolute;inset:0;border-radius:50%;border:2px solid var(--red);animation:orbPulse 2.6s ease-out infinite}
+  .orb::after{content:'';position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--red);animation:orbPulse 2.6s ease-out .9s infinite}
+  .orb img{width:64px;height:auto;position:relative;z-index:2;filter:drop-shadow(0 2px 6px rgba(200,16,46,.2))}
+  @keyframes orbPulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+  .login-eyebrow{font-size:12px;letter-spacing:.4em;text-transform:uppercase;color:var(--red);font-weight:600;margin-bottom:22px;opacity:0;transform:translateY(20px);animation:lrise 1s .4s forwards}
+  .login-title{font-size:clamp(40px,6.5vw,88px);font-weight:200;line-height:.95;letter-spacing:-.035em;color:var(--dark)}
+  .login-title .l{display:inline-block;opacity:0;transform:translateY(50px)}
+  .login-title .accent{font-weight:800;background:linear-gradient(120deg,var(--red),#F0846A);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .login-desc{margin-top:26px;max-width:400px;font-size:17px;line-height:1.6;color:var(--muted);font-weight:300;opacity:0;transform:translateY(20px);animation:lrise 1s 1.4s forwards}
+  @keyframes lrise{to{opacity:1;transform:translateY(0)}}
+  /* sağ cam kart */
+  .loginbox{width:380px;max-width:100%;background:rgba(255,255,255,.72);backdrop-filter:blur(20px);border:1px solid rgba(200,16,46,.12);border-radius:22px;padding:36px 32px;box-shadow:0 30px 70px -24px rgba(200,16,46,.22),0 2px 8px rgba(0,0,0,.04);opacity:0;transform:translateY(40px) scale(.97);animation:cardIn 1.1s .9s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes cardIn{to{opacity:1;transform:translateY(0) scale(1)}}
+  .loginbox .lb-logo{margin-bottom:20px}
+  .loginbox .lb-logo img{height:30px;width:auto}
+  .loginbox .lb-h{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+  .loginbox .sub{font-size:13px;color:var(--muted);margin-bottom:26px}
+  .loginbox label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin:16px 0 6px;text-transform:uppercase;letter-spacing:.4px}
+  .loginbox select,.loginbox input{width:100%;padding:14px 14px;border:1px solid #E6E2E4;border-radius:12px;font-size:14px;font-family:inherit;background:#fff;transition:border-color .3s,box-shadow .3s;outline:none}
+  .loginbox select:focus,.loginbox input:focus{border-color:var(--red);box-shadow:0 0 0 4px rgba(200,16,46,.08)}
+  .loginbox button{width:100%;margin-top:24px;padding:15px;background:var(--red);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;transition:all .4s cubic-bezier(.16,1,.3,1)}
+  .loginbox button:hover{background:#E1223D;transform:translateY(-2px);box-shadow:0 16px 36px -12px rgba(225,34,61,.45)}
+  .loginbox button:disabled{opacity:.6;cursor:wait;transform:none}
+  .loginbox .err{color:var(--red);font-size:12px;margin-top:12px;text-align:center;min-height:16px}
+  .loginbox .hint{font-size:11px;color:#B5AEB2;margin-top:20px;text-align:center;line-height:1.6}
+  @media(max-width:860px){.login-hero{text-align:center;max-width:100%}.login-hero::before{left:-10%;right:-10%}.orb-wrap{display:none}.login-desc{margin-left:auto;margin-right:auto}}
   header{background:linear-gradient(rgba(18,18,20,0.72),rgba(18,18,20,0.80)),url('header-bg.jpg');background-size:cover;background-position:center 42%;color:#fff;padding:42px 26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
   header .brand{display:flex;align-items:center;gap:11px}
   header .dot{width:11px;height:11px;border-radius:50%;background:var(--red)}
@@ -118,17 +139,24 @@
 </style>
 </head>
 <body>
-<canvas id="waveBg" style="position:fixed;inset:0;width:100vw;height:100vh;z-index:0;pointer-events:none"></canvas>
+<canvas id="waveBg" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block"></canvas>
 <div id="login">
+  <div class="login-hero">
+    <div class="orb-wrap"><div class="orb"><img src="sompo-logo.png" alt="Sompo"></div></div>
+    <div class="login-eyebrow">Acente Arama Takip Sistemi</div>
+    <h1 class="login-title" id="loginTitle"></h1>
+    <p class="login-desc">Her görüşme bir fırsat. Fareni oynat — sisteme girmeden önce, sistemin nabzını hisset.</p>
+  </div>
   <div class="loginbox">
-    <div class="logo" style="flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:10px"><img src="sompo-logo.png" alt="Sompo Sigorta" style="height:38px;width:auto"><h1 style="font-size:17px">Acente Aramaları</h1></div>
-    <div class="sub">Sompo Sigorta · Görüşme Takip Sistemi</div>
+    <div class="lb-logo"><img src="sompo-logo.png" alt="Sompo Sigorta"></div>
+    <h2 class="lb-h">Giriş yap</h2>
+    <div class="sub">Devam etmek için bilgilerinizi girin</div>
     <label>Kullanıcı</label><select id="loginUser"><option>Yükleniyor...</option></select>
     <label>Şifre</label>
     <input type="password" id="loginPass" placeholder="••••••" onkeydown="if(event.key==='Enter')doLogin()">
-    <button id="loginBtn" onclick="doLogin()">Giriş Yap</button>
+    <button id="loginBtn" onclick="doLogin()">Panele Gir →</button>
     <div class="err" id="loginErr"></div>
-    <div class="hint">Ortak şifre ile giriş yapılır.</div>
+    <div class="hint">Ortak şifre ile giriş yapılır · Veriler güvenli sunucuda saklanır</div>
   </div>
 </div>
 
@@ -142,67 +170,70 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="three.min.js"></script>
 <script>
-// ===== ARKA PLAN DALGA ANİMASYONU (saf Canvas, dış bağımlılık yok) =====
+// ===== ARKA PLAN DALGA (three.js — gömülü, ilk tasarımın birebiri) =====
+window._dalgaModu='giris';
 (function(){
-  const cv=document.getElementById('waveBg');if(!cv)return;
-  const ctx=cv.getContext('2d');
-  let W,H,dpr;
-  function boyut(){dpr=Math.min(devicePixelRatio||1,2);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
-  boyut();addEventListener('resize',boyut);
+  const cv=document.getElementById('waveBg');
+  if(!cv||typeof THREE==='undefined')return;
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,100);
+  camera.position.set(0,4,9);
+  const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+  renderer.setSize(innerWidth,innerHeight,false);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 
-  // mod: 'giris' (belirgin, hızlı) | 'app' (soluk, yavaş)
-  window._dalgaModu='giris';
-  let mx=0.5,my=0.5,tmx=0.5,tmy=0.5;
-  addEventListener('mousemove',e=>{tmx=e.clientX/innerWidth;tmy=e.clientY/innerHeight;});
+  // net kırmızı dalgalı grid (üst katman)
+  const geo=new THREE.PlaneGeometry(40,40,60,60);
+  const mat=new THREE.MeshBasicMaterial({color:0xC8102E,wireframe:true,transparent:true,opacity:0.28});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.rotation.x=-Math.PI/2.2;mesh.position.y=-3;scene.add(mesh);
+  const base=geo.attributes.position.array.slice();
 
-  const COLS=26,ROWS=16;
+  // soluk ikinci katman (derinlik)
+  const geo2=new THREE.PlaneGeometry(40,40,50,50);
+  const mesh2=new THREE.Mesh(geo2,new THREE.MeshBasicMaterial({color:0xE1223D,wireframe:true,transparent:true,opacity:0.12}));
+  mesh2.rotation.x=-Math.PI/2.2;mesh2.position.y=-3.6;scene.add(mesh2);
+  const base2=geo2.attributes.position.array.slice();
+
+  let mx=0,my=0,tmx=0,tmy=0;
+  addEventListener('mousemove',e=>{tmx=(e.clientX/innerWidth-0.5)*2;tmy=(e.clientY/innerHeight-0.5)*2;});
+
   let t=0;
-  function ciz(){
-    requestAnimationFrame(ciz);
+  function animate(){
+    requestAnimationFrame(animate);
     const app=window._dalgaModu==='app';
-    // app modunda çok daha yavaş ve soluk
-    t+= app?0.006:0.016;
+    t += app?0.006:0.02;
     mx+=(tmx-mx)*0.05;my+=(tmy-my)*0.05;
-    ctx.clearRect(0,0,W,H);
 
-    const opacity= app?0.10:0.42;
-    const genlik= app?14:30;         // dalga yüksekliği
-    const cizgi= app?0.6:0.9;
-    ctx.strokeStyle='rgba(200,16,46,'+opacity+')';
-    ctx.lineWidth=cizgi;
+    // app modunda dalgalar çok soluk
+    mat.opacity   = app?0.06:0.30;
+    mesh2.material.opacity = app?0.03:0.13;
+    const genlik = app?0.35:0.85;
 
-    const gw=W/(COLS-1), gh=H/(ROWS-1);
-    const kaydir=(mx-0.5)*(app?20:60), egim=(my-0.5)*(app?14:40);
+    const p=geo.attributes.position.array;
+    for(let i=0;i<p.length;i+=3){
+      const x=base[i],y=base[i+1];
+      p[i+2]=Math.sin(x*0.35+t)*genlik+Math.cos(y*0.35+t*0.85)*genlik;
+    }
+    geo.attributes.position.needsUpdate=true;
+    const p2=geo2.attributes.position.array;
+    for(let i=0;i<p2.length;i+=3){
+      const x=base2[i],y=base2[i+1];
+      p2[i+2]=Math.sin(x*0.3+t*1.2+1)*genlik*0.8+Math.cos(y*0.3+t)*genlik*0.8;
+    }
+    geo2.attributes.position.needsUpdate=true;
 
-    // grid noktalarını hesapla
-    const pts=[];
-    for(let r=0;r<ROWS;r++){
-      pts[r]=[];
-      for(let c=0;c<COLS;c++){
-        const bx=c*gw, by=r*gh;
-        const z=Math.sin(c*0.4+t)*genlik + Math.cos(r*0.45+t*0.85)*genlik*0.7;
-        const pers=1+(r/ROWS)*0.5; // alt satırlar biraz açılsın (perspektif hissi)
-        pts[r][c]={x:bx+kaydir*(r/ROWS),y:by+z*0.5+egim*(c/COLS)};
-      }
-    }
-    // yatay çizgiler
-    for(let r=0;r<ROWS;r++){
-      ctx.beginPath();
-      for(let c=0;c<COLS;c++){const p=pts[r][c];c?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);}
-      ctx.stroke();
-    }
-    // dikey çizgiler
-    for(let c=0;c<COLS;c++){
-      ctx.beginPath();
-      for(let r=0;r<ROWS;r++){const p=pts[r][c];r?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);}
-      ctx.stroke();
-    }
+    mesh.rotation.z=mx*0.12;mesh2.rotation.z=mx*0.08;
+    camera.position.x+=(mx*2.5-camera.position.x)*0.04;
+    camera.position.y+=(4-my*1.5-camera.position.y)*0.04;
+    camera.lookAt(0,-2,0);
+    renderer.render(scene,camera);
   }
-  ciz();
+  animate();
+  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight,false);});
 })();
-// dalga modunu değiştir (giriş belirgin, app soluk)
-function dalgaModu(m){window._dalgaModu=m;const cv=document.getElementById('waveBg');if(cv)cv.style.opacity=(m==='app')?'1':'1';}
+function dalgaModu(m){window._dalgaModu=m;}
 </script>
 <script>
 const AYLAR=['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -235,6 +266,20 @@ async function initLogin(){
   // bu yüzden kullanıcı listesini gömüyoruz (sadece isim/kod, gizli değil).
   USERS=[{"id": "mustafa.arslan", "ad": "Mustafa Arslan", "rol": "admin"}, {"id": "melek.zavalsiz", "ad": "Melek Zavalsız", "rol": "uw"}, {"id": "emine.moroglu", "ad": "Emine Moroğlu Yazıcı", "rol": "uw"}, {"id": "veysel.aydin", "ad": "Veysel Aydın", "rol": "uw"}, {"id": "ali.suren", "ad": "Ali Rıza Süren", "rol": "uw"}, {"id": "batuhan.kavraz", "ad": "Batuhan Kavraz", "rol": "uw"}, {"id": "burhan.ozer", "ad": "Burhan Özer", "rol": "uw"}, {"id": "fatma.unlu", "ad": "Fatma Nur Ünlü", "rol": "uw"}, {"id": "naime.atay", "ad": "Naime Pınar Atay", "rol": "uw"}, {"id": "raziye.gunes", "ad": "Raziye Güneş", "rol": "uw"}, {"id": "turan.gokdemir", "ad": "Turan Gökdemir", "rol": "uw"}, {"id": "yusuf.sacan", "ad": "Yusuf Sacan", "rol": "uw"}];
   $('loginUser').innerHTML=USERS.map(u=>'<option value="'+u.id+'">'+esc(u.ad)+(u.rol==='admin'?' ★':'')+'</option>').join('');
+  // hero başlık — harf harf
+  const lt=$('loginTitle');
+  if(lt && !lt.dataset.done){
+    lt.dataset.done=1;
+    const T='Acente|Aramaları';
+    T.split('').forEach((ch,i)=>{
+      if(ch==='|'){lt.appendChild(document.createElement('br'));return;}
+      const s=document.createElement('span');
+      s.className='l'+(i>6?' accent':'');
+      s.textContent=ch;
+      s.style.animation='lrise .9s '+(0.5+i*0.06)+'s forwards';
+      lt.appendChild(s);
+    });
+  }
 }
 async function doLogin(){
   const id=$('loginUser').value,p=$('loginPass').value;
