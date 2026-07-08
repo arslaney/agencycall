@@ -238,8 +238,12 @@ module.exports = async (req, res) => {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY tanımlı değil' });
       // veriyi topla
-      const rows = await sb('acente_gorusmeler_kio?select=uw_id,tarih,ay,bolge,acente,tur,durum,prim,kio_mu,acente_uw(ad)&order=tarih.desc&limit=500');
+      const rows = await sb('acente_gorusmeler_kio?select=uw_id,tarih,ay,bolge,acente,tur,durum,prim,kio_mu,kio_kod,acente_uw(ad)&order=tarih.desc&limit=500');
       const kioAll = await sb('acente_kio?select=kod&aktif=eq.true');
+      // KİO kapsamasını 500 satır limitinden BAĞIMSIZ hesapla (tüm yıl, tüm görüşmeler)
+      const yilNow = new Date().getFullYear();
+      const arananRows = await sb(`acente_gorusmeler_kio?select=kio_kod&kio_mu=eq.true&kio_kod=not.is.null&yil=eq.${yilNow}`);
+      const kioArananKod = new Set(arananRows.map(r => r.kio_kod));
       // özet istatistik çıkar (token tasarrufu için ham değil özet gönderiyoruz)
       const stat = { toplam: rows.length, uw: {}, ay: {}, bolge: {}, durum: {}, kio: 0, dis: 0, prim: 0, acente: {} };
       rows.forEach(r => {
@@ -252,7 +256,6 @@ module.exports = async (req, res) => {
         if (r.kio_mu) stat.kio++; else stat.dis++;
         if (r.durum === 'Poliçe Bağlandı') stat.prim += Number(r.prim) || 0;
       });
-      const kioArananKod = new Set(rows.filter(r => r.kio_mu && r.kio_kod).map(r => r.kio_kod));
       const topAcente = Object.entries(stat.acente).sort((a,b)=>b[1]-a[1]).slice(0,8);
       const AYLAR = ['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
       const ayStr = Object.entries(stat.ay).sort((a,b)=>a[0]-b[0]).map(([k,v])=>`${AYLAR[k]}: ${v}`).join(', ');
