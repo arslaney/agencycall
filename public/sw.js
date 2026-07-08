@@ -1,5 +1,5 @@
 // Sompo Acente Aramaları — Service Worker (v3 — HTML her zaman taze)
-const CACHE = 'acente-v5';
+const CACHE = 'acente-v7';
 const SHELL = [
   '/sompo-logo.png',
   '/header-bg.jpg',
