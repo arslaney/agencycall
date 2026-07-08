@@ -15,10 +15,12 @@
 <style>
   :root{--red:#C8102E;--dark:#1A1A1A;--bg:#f4f4f5;--card:#fff;--line:#e4e4e7;--muted:#71717a;--soft:#fafafa;--green:#0a7d32}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:linear-gradient(180deg,#eef0f3 0%,#f6f6f8 240px,#f4f4f5 100%);background-attachment:fixed;color:var(--dark);line-height:1.5}
+  body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:transparent;color:var(--dark);line-height:1.5}
+  #app{position:relative;z-index:2}
+  #login{position:relative;z-index:2}
   .hidden{display:none!important}
-  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1A1A1A,#2d2d2d);padding:16px}
-  .loginbox{background:#fff;border-radius:14px;padding:38px 34px;width:360px;max-width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:transparent;padding:16px}
+  .loginbox{background:rgba(255,255,255,.82);backdrop-filter:blur(16px);border:1px solid rgba(200,16,46,.1);border-radius:14px;padding:38px 34px;width:360px;max-width:100%;box-shadow:0 30px 70px -24px rgba(200,16,46,.25),0 2px 8px rgba(0,0,0,.05)}
   .loginbox .logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
   .loginbox .dot{width:14px;height:14px;border-radius:50%;background:var(--red)}
   .loginbox h1{font-size:19px;font-weight:800}
@@ -116,6 +118,7 @@
 </style>
 </head>
 <body>
+<canvas id="waveBg" style="position:fixed;inset:0;width:100vw;height:100vh;z-index:0;pointer-events:none"></canvas>
 <div id="login">
   <div class="loginbox">
     <div class="logo" style="flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:10px"><img src="sompo-logo.png" alt="Sompo Sigorta" style="height:38px;width:auto"><h1 style="font-size:17px">Acente Aramaları</h1></div>
@@ -139,6 +142,68 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ===== ARKA PLAN DALGA ANİMASYONU (saf Canvas, dış bağımlılık yok) =====
+(function(){
+  const cv=document.getElementById('waveBg');if(!cv)return;
+  const ctx=cv.getContext('2d');
+  let W,H,dpr;
+  function boyut(){dpr=Math.min(devicePixelRatio||1,2);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+  boyut();addEventListener('resize',boyut);
+
+  // mod: 'giris' (belirgin, hızlı) | 'app' (soluk, yavaş)
+  window._dalgaModu='giris';
+  let mx=0.5,my=0.5,tmx=0.5,tmy=0.5;
+  addEventListener('mousemove',e=>{tmx=e.clientX/innerWidth;tmy=e.clientY/innerHeight;});
+
+  const COLS=26,ROWS=16;
+  let t=0;
+  function ciz(){
+    requestAnimationFrame(ciz);
+    const app=window._dalgaModu==='app';
+    // app modunda çok daha yavaş ve soluk
+    t+= app?0.006:0.016;
+    mx+=(tmx-mx)*0.05;my+=(tmy-my)*0.05;
+    ctx.clearRect(0,0,W,H);
+
+    const opacity= app?0.10:0.42;
+    const genlik= app?14:30;         // dalga yüksekliği
+    const cizgi= app?0.6:0.9;
+    ctx.strokeStyle='rgba(200,16,46,'+opacity+')';
+    ctx.lineWidth=cizgi;
+
+    const gw=W/(COLS-1), gh=H/(ROWS-1);
+    const kaydir=(mx-0.5)*(app?20:60), egim=(my-0.5)*(app?14:40);
+
+    // grid noktalarını hesapla
+    const pts=[];
+    for(let r=0;r<ROWS;r++){
+      pts[r]=[];
+      for(let c=0;c<COLS;c++){
+        const bx=c*gw, by=r*gh;
+        const z=Math.sin(c*0.4+t)*genlik + Math.cos(r*0.45+t*0.85)*genlik*0.7;
+        const pers=1+(r/ROWS)*0.5; // alt satırlar biraz açılsın (perspektif hissi)
+        pts[r][c]={x:bx+kaydir*(r/ROWS),y:by+z*0.5+egim*(c/COLS)};
+      }
+    }
+    // yatay çizgiler
+    for(let r=0;r<ROWS;r++){
+      ctx.beginPath();
+      for(let c=0;c<COLS;c++){const p=pts[r][c];c?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);}
+      ctx.stroke();
+    }
+    // dikey çizgiler
+    for(let c=0;c<COLS;c++){
+      ctx.beginPath();
+      for(let r=0;r<ROWS;r++){const p=pts[r][c];r?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);}
+      ctx.stroke();
+    }
+  }
+  ciz();
+})();
+// dalga modunu değiştir (giriş belirgin, app soluk)
+function dalgaModu(m){window._dalgaModu=m;const cv=document.getElementById('waveBg');if(cv)cv.style.opacity=(m==='app')?'1':'1';}
+</script>
 <script>
 const AYLAR=['','Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const BOLGELER=['IST-AVR1','IST-AVR2','IST-AND1','IST-AND2','ADZ','EGE','GAB','MRM','OAB','KDZ'];
@@ -182,9 +247,10 @@ async function doLogin(){
   }catch(e){$('loginErr').textContent=e.error||'Giriş başarısız';}
   $('loginBtn').disabled=false;
 }
-function doLogout(){sessionStorage.removeItem('acur');CUR=null;PASS=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginPass').value='';}
+function doLogout(){sessionStorage.removeItem('acur');CUR=null;PASS=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginPass').value='';if(typeof dalgaModu==='function')dalgaModu('giris');}
 async function enterApp(){
   $('login').classList.add('hidden');$('app').classList.remove('hidden');
+  if(typeof dalgaModu==='function')dalgaModu('app');
   $('whoami').textContent=CUR.ad+(CUR.unvan?' · '+CUR.unvan:'');
   $('roleBadge').textContent=CUR.rol==='admin'?'ADMIN':'UW';
   $('roleBadge').className='badge '+(CUR.rol==='admin'?'admin':'uw');
