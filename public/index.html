@@ -148,6 +148,16 @@
   .rec:hover{border-color:var(--red)}
   .bar .fill{width:0;transition:width .7s cubic-bezier(.2,.8,.2,1)}
   .bar.anim .fill{width:var(--w)}
+  /* yetki seviyeleri chip renkleri */
+  .ykchip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap}
+  .ykchip.tl{background:#eef4ff;color:#1e40af}
+  .ykchip.unl{background:#e6f5ec;color:#0a7d32}
+  .ykchip.pct{background:#fdecef;color:#9E0C24}
+  .ykchip.rm{background:#f3f0fb;color:#5a4fb0}
+  .ykchip.yes{background:#e6f5ec;color:#0a7d32}
+  .ykchip.no{background:#f1f5f9;color:#64748b}
+  .ykchip.ref{background:#fef6e7;color:#a16207}
+  .ykchip.na{background:#f8fafc;color:#94a3b8}
 </style>
 </head>
 <body>
@@ -188,6 +198,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="three.min.js"></script>
+<script src="yetki-data.js"></script>
 <script>
 // ===== SES MOTORU (Web Audio API — dış dosya yok, koddan üretilir) =====
 window._sesAcik = true; // varsayılan açık
@@ -949,7 +960,12 @@ async function renderPanelim(){
             <td style="padding-right:16px;font-weight:700;color:${u.donusum>=40?'var(--green)':u.donusum>=20?'#a16207':'var(--red)'}">%${u.donusum}</td>
           </tr>`;}).join('')}</tbody>
       </table></div>
-    </div>`;
+    </div>
+
+    <div class="panel" id="panelYetki" style="margin-top:14px"></div>`;
+
+  // yetki seviyeleri
+  renderYetkiBolum();
 
   // bölge barları
   const be=Object.entries(bolgeGrup);
@@ -964,6 +980,103 @@ async function renderPanelim(){
     '<div class="rec" style="padding:9px 16px"><div class="acente" style="font-size:13px">'+esc(k.ad)+'</div>'+
     '<div class="kisi">'+esc(k.il||'')+' · '+esc(k.bolge||'')+(k.ekip_aradi?' · <span style="color:#a16207">ekipten biri aramış</span>':' · <span style="color:var(--red)">hiç aranmamış</span>')+'</div></div>'
   ).join(''):'<div class="empty" style="padding:16px">🎉 Bölgendeki tüm KİO\'ları aramışsın!</div>';
+}
+
+/* ===== UW YETKİ SEVİYELERİ (Panelim içinde, sadece kendi yetkileri) ===== */
+const YK_KOM=new Set(['9607','9610','9623']), YK_RM=new Set(['9606']), YK_EH=new Set(['9605']);
+function ykParamAd(pc){const D=window.YETKI_DATA;return (D&&D.paramnames[pc])||('Parametre '+pc);}
+function ykProdAd(pr){const D=window.YETKI_DATA;return (D&&D.prodnames[pr])||('Ürün '+pr);}
+function ykFmt(raw,pc){
+  if(raw===null||raw===undefined||raw==='')return{txt:'—',cls:'na'};
+  if(typeof raw==='string'){const s=raw.trim();
+    if(s==='E'||s.toUpperCase()==='EVET')return{txt:'Evet',cls:'yes'};
+    if(s==='H'||s.toUpperCase()==='HAYIR')return{txt:'Hayır',cls:'no'};
+    if(/^\d+\s*\/\s*\d+$/.test(s))return{txt:s.replace(/\s/g,'')+' ile aynı',cls:'ref'};
+    const n=parseFloat(s.replace(/\./g,'').replace(',','.'));
+    if(!isNaN(n)&&/^[\d.,]+$/.test(s))return ykFmt(n,pc);
+    return{txt:s,cls:'ref'};}
+  if(YK_KOM.has(pc)){if(raw===0)return{txt:'%0',cls:'no'};return{txt:'%'+new Intl.NumberFormat('tr-TR',{maximumFractionDigits:1}).format(raw),cls:'pct'};}
+  if(YK_RM.has(pc)){if(raw>=9999)return{txt:'Sınır yok',cls:'unl'};if(raw===0)return{txt:'—',cls:'na'};return{txt:new Intl.NumberFormat('tr-TR').format(raw)+' puan',cls:'rm'};}
+  if(raw>=5e9)return{txt:'LİMİTSİZ',cls:'unl'};
+  if(raw===0)return{txt:'₺0',cls:'no'};
+  return{txt:'₺'+new Intl.NumberFormat('tr-TR').format(raw),cls:'tl'};
+}
+function ykResolve(person,key){
+  const lv=person.lv[key];
+  if(lv===undefined||lv==='-')return{state:'oos'};
+  if(lv===0)return{state:'none',lv:0};
+  const f5=window.YETKI_DATA.f5[key];
+  if(!f5){if(typeof lv==='number'&&lv>=1&&lv<=15)return{state:'nomap',lv};return{state:'none',lv};}
+  if(typeof lv!=='number'||lv<1||lv>15)return{state:'none',lv};
+  const idx=lv-1;
+  return{state:'ok',lv,entries:f5.map(e=>({tem:e.tem,raw:e.vals[idx],vals:e.vals}))};
+}
+function ykTemParts(tem){if(!tem)return{code:'',name:''};const m=String(tem).match(/^\s*(\d+)\s*-\s*(.+)$/);if(m)return{code:m[1],name:m[2].trim()};return{code:'',name:String(tem).trim()};}
+window._ykOpen=false;
+function toggleYetki(){window._ykOpen=!window._ykOpen;renderYetkiBolum();}
+function renderYetkiBolum(){
+  const el=$('panelYetki');if(!el)return;
+  const D=window.YETKI_DATA;
+  const p=(D&&D.people)?D.people[CUR.id]:null;
+  if(!p){el.style.display='none';return;}
+  el.style.display='';
+  // özet say
+  let cAktif=0,cLimitsiz=0,cYok=0;
+  Object.keys(p.lv).forEach(key=>{
+    const r=ykResolve(p,key);
+    if(r.state==='ok'){cAktif++;r.entries.forEach(e=>{const f=ykFmt(e.raw,key.split('|')[0]);if(f.cls==='unl'||f.cls==='yes')cLimitsiz++;});}
+    else if(r.state==='nomap')cAktif++;
+    else if(r.state==='none')cYok++;
+  });
+  const head=`<h2 onclick="toggleYetki()" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+    <span>🔐 Yetki Seviyelerim</span>
+    <span style="font-size:11px;font-weight:600;color:var(--muted);background:#f1f5f9;padding:2px 8px;border-radius:20px">${cAktif} aktif yetki</span>
+    <span style="margin-left:auto;font-size:13px;color:var(--muted)">${window._ykOpen?'▴ gizle':'▾ göster'}</span></h2>`;
+  if(!window._ykOpen){
+    el.innerHTML=head+`<div style="padding:12px 16px;font-size:13px;color:var(--muted)">Ürün bazında bağlama yetki seviyelerin ve limitlerin. Görmek için başlığa tıkla.</div>`;
+    return;
+  }
+  // param -> [{prod,res}]
+  const groups={};
+  Object.keys(p.lv).forEach(key=>{const[pc,prod]=key.split('|');(groups[pc]=groups[pc]||[]).push({prod,pc,res:ykResolve(p,key)});});
+  Object.values(groups).forEach(a=>a.sort((x,y)=>(+x.prod)-(+y.prod)));
+  const order=Object.keys(groups).sort((a,b)=>ykParamAd(a).localeCompare(ykParamAd(b),'tr'));
+  let body='';
+  order.forEach(pc=>{
+    const aktifler=groups[pc].filter(g=>g.res.state==='ok'||g.res.state==='nomap');
+    if(!aktifler.length)return; // sadece yetkili olduklarını göster
+    let cards='';
+    aktifler.forEach(({prod,res})=>{
+      let rows='';
+      if(res.state==='ok'){
+        res.entries.forEach(e=>{const tp=ykTemParts(e.tem);const f=ykFmt(e.raw,pc);
+          rows+=`<tr><td style="padding:4px 8px;font-size:12px;color:#3f3f46">${tp.code?'<b style="color:var(--muted);font-size:11px">'+tp.code+'</b> ':''}${esc(tp.name||'Limit')}</td><td style="padding:4px 8px;text-align:right"><span class="ykchip ${f.cls}">${esc(f.txt)}</span></td></tr>`;});
+      } else {
+        rows=`<tr><td colspan="2" style="padding:6px 8px;font-size:12px;color:#a16207">Seviye ${res.lv} atanmış; bu ürün için ayrı limit tablosu yok (genel kurala tabi).</td></tr>`;
+      }
+      cards+=`<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
+          <div style="font-weight:700;font-size:13px">${esc(ykProdAd(prod))} <span style="color:var(--muted);font-size:11px;font-weight:500">· Ürün ${prod}</span></div>
+          <span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap">Seviye ${res.lv}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse">${rows}</table>
+      </div>`;
+    });
+    body+=`<div style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #f5b5ae">${esc(ykParamAd(pc))} <span style="color:var(--muted);font-size:11px;font-weight:500">(${pc})</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${cards}</div>
+    </div>`;
+  });
+  el.innerHTML=head+`
+    <div style="padding:14px 16px">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:10px">
+        <div><div style="font-size:22px;font-weight:800">${cAktif}</div><div style="font-size:11px;color:var(--muted)">yetkili ürün</div></div>
+        <div><div style="font-size:22px;font-weight:800;color:var(--green)">${cLimitsiz}</div><div style="font-size:11px;color:var(--muted)">limitsiz/evet</div></div>
+        <div><div style="font-size:22px;font-weight:800;color:var(--muted)">${cYok}</div><div style="font-size:11px;color:var(--muted)">yetki yok</div></div>
+        <div style="margin-left:auto;align-self:center;font-size:11px;color:var(--muted);max-width:280px;text-align:right">Kaynak: otorite dokümanı (kişi→seviye) + limit tablosu (seviye→değer). Yalnızca kendi yetkilerini görürsün.</div>
+      </div>
+      ${body||'<div class="empty" style="padding:16px">Tanımlı aktif yetki bulunamadı.</div>'}
+    </div>`;
 }
 
 async function renderKioTakip(){
