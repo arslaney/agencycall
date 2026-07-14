@@ -873,7 +873,21 @@ function renderUwCompare(){
     <div class="panel" style="margin-top:18px"><h2>Çıkarımlar</h2><div class="body">
       ${rows.length?'<div class="insight">En aktif UW: <b>'+esc(rows[0].u)+'</b> ('+rows[0].t+' görüşme)</div>':''}
       <div class="insight">Toplam ${ROWS.length} görüşme · ${uws.length} UW · ${uniq(ROWS.map(r=>r.acente)).length} farklı acente</div>
-    </div></div>`;
+    </div></div>
+
+    <div class="panel" style="margin-top:18px"><h2>🔐 UW Yetki Seviyeleri</h2>
+      <div class="body" style="padding:14px 16px">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Bir underwriter seç; ürün bazında bağlama yetki seviyelerini ve limitlerini gör.</div>
+        <select id="ykAdminSel" onchange="renderYetkiAdmin()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;min-width:260px">
+          ${Object.entries((window.YETKI_DATA&&window.YETKI_DATA.people)||{}).map(([uw,p])=>`<option value="${uw}"${uw===CUR.id?' selected':''}>${esc(p.name)} · ${esc(p.unvan||'')}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="panel" id="panelYetkiAdmin" style="margin-top:14px"></div>`;
+
+  // yetki paneli ilk render (kapalı)
+  window._ykOpenAdmin=false;
+  renderYetkiAdmin();
 }
 
 // ===== 📊 UW KİŞİSEL PANELİ =====
@@ -1013,11 +1027,20 @@ function ykResolve(person,key){
 }
 function ykTemParts(tem){if(!tem)return{code:'',name:''};const m=String(tem).match(/^\s*(\d+)\s*-\s*(.+)$/);if(m)return{code:m[1],name:m[2].trim()};return{code:'',name:String(tem).trim()};}
 window._ykOpen=false;
+window._ykOpenAdmin=false;
 function toggleYetki(){window._ykOpen=!window._ykOpen;renderYetkiBolum();}
-function renderYetkiBolum(){
-  const el=$('panelYetki');if(!el)return;
+function toggleYetkiAdmin(){window._ykOpenAdmin=!window._ykOpenAdmin;renderYetkiAdmin();}
+function renderYetkiAdmin(){
+  const sel=$('ykAdminSel');
+  const uw=sel?sel.value:CUR.id;
+  renderYetkiBolum(uw,'panelYetkiAdmin');
+}
+function renderYetkiBolum(uwId,elId){
+  const el=$(elId||'panelYetki');if(!el)return;
   const D=window.YETKI_DATA;
-  const p=(D&&D.people)?D.people[CUR.id]:null;
+  const targetUw=uwId||CUR.id;
+  const p=(D&&D.people)?D.people[targetUw]:null;
+  const acik=elId?window._ykOpenAdmin:window._ykOpen;
   if(!p){el.style.display='none';return;}
   el.style.display='';
   // özet say
@@ -1028,12 +1051,15 @@ function renderYetkiBolum(){
     else if(r.state==='nomap')cAktif++;
     else if(r.state==='none')cYok++;
   });
-  const head=`<h2 onclick="toggleYetki()" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-    <span>🔐 Yetki Seviyelerim</span>
+  const isAdminView=!!elId;
+  const baslikMetin=isAdminView?('🔐 '+esc(p.name)+' — Yetki Seviyeleri'):'🔐 Yetki Seviyelerim';
+  const tikla=isAdminView?'toggleYetkiAdmin()':'toggleYetki()';
+  const head=`<h2 onclick="${tikla}" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+    <span>${baslikMetin}</span>
     <span style="font-size:11px;font-weight:600;color:var(--muted);background:#f1f5f9;padding:2px 8px;border-radius:20px">${cAktif} aktif yetki</span>
-    <span style="margin-left:auto;font-size:13px;color:var(--muted)">${window._ykOpen?'▴ gizle':'▾ göster'}</span></h2>`;
-  if(!window._ykOpen){
-    el.innerHTML=head+`<div style="padding:12px 16px;font-size:13px;color:var(--muted)">Ürün bazında bağlama yetki seviyelerin ve limitlerin. Görmek için başlığa tıkla.</div>`;
+    <span style="margin-left:auto;font-size:13px;color:var(--muted)">${acik?'▴ gizle':'▾ göster'}</span></h2>`;
+  if(!acik){
+    el.innerHTML=head+`<div style="padding:12px 16px;font-size:13px;color:var(--muted)">Ürün bazında bağlama yetki seviyeleri ve limitleri. Görmek için başlığa tıkla.</div>`;
     return;
   }
   // param -> [{prod,res}]
@@ -1073,7 +1099,7 @@ function renderYetkiBolum(){
         <div><div style="font-size:22px;font-weight:800">${cAktif}</div><div style="font-size:11px;color:var(--muted)">yetkili ürün</div></div>
         <div><div style="font-size:22px;font-weight:800;color:var(--green)">${cLimitsiz}</div><div style="font-size:11px;color:var(--muted)">limitsiz/evet</div></div>
         <div><div style="font-size:22px;font-weight:800;color:var(--muted)">${cYok}</div><div style="font-size:11px;color:var(--muted)">yetki yok</div></div>
-        <div style="margin-left:auto;align-self:center;font-size:11px;color:var(--muted);max-width:280px;text-align:right">Kaynak: otorite dokümanı (kişi→seviye) + limit tablosu (seviye→değer). Yalnızca kendi yetkilerini görürsün.</div>
+        <div style="margin-left:auto;align-self:center;font-size:11px;color:var(--muted);max-width:280px;text-align:right">Kaynak: otorite dokümanı (kişi→seviye) + limit tablosu (seviye→değer).${isAdminView?'':' Yalnızca kendi yetkilerini görürsün.'}</div>
       </div>
       ${body||'<div class="empty" style="padding:16px">Tanımlı aktif yetki bulunamadı.</div>'}
     </div>`;
